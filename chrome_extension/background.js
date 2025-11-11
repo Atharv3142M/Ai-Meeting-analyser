@@ -1,7 +1,8 @@
-// Service Worker - Manages recording and communication with local server
+// Service Worker - Manages recording state and communication with local server
 
-let isRecording = false;
-let recordingData = {
+// This is the "source of truth" for the recording state.
+let recordingState = {
+  isRecording: false,
   name: '',
   startTime: null,
   tabId: null
@@ -27,14 +28,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // Indicates async response
 
   } else if (request.action === 'getRecordingStatus') {
+    // Popup is asking for the current state
     sendResponse({ 
-      isRecording, 
-      recordingData: isRecording ? recordingData : null 
+      isRecording: recordingState.isRecording, 
+      recordingData: recordingState.isRecording ? recordingState : null 
     });
+    return true; // Sync response but good practice
 
   // --- From recorder.js ---
   } else if (request.action === 'recordingStopped') {
-    handleRecordingStopped(request.audioBlob);
+    // Pass the new mimeType variable
+    handleRecordingStopped(request.audioBlob, request.mimeType);
     sendResponse({ success: true });
     return true; // Indicates async response
   }
@@ -43,11 +47,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // --- Tab Management ---
 // Stop recording if the tab is closed
 chrome.tabs.onRemoved.addListener((tabId) => {
-  if (isRecording && recordingData.tabId === tabId) {
+  if (recordingState.isRecording && recordingState.tabId === tabId) {
     console.warn('Recorded tab was closed! Stopping recording.');
-    isRecording = false;
+    // Reset state
+    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
     updateBadge(false);
-    recordingData = { name: '', startTime: null, tabId: null };
     
     chrome.notifications.create({
       type: 'basic',
@@ -69,11 +73,12 @@ async function startRecording(recordingName) {
 
   // 2. Check for restricted URLs
   if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://')) {
-    throw new Error('Cannot record on Chrome internal pages.');
+    throw new Error('Cannot record on Chrome internal pages. Please use on a website like google.com.');
   }
 
   // 3. Set global recording state
-  recordingData = {
+  recordingState = {
+    isRecording: true,
     name: recordingName,
     startTime: Date.now(),
     tabId: tab.id
@@ -87,6 +92,8 @@ async function startRecording(recordingName) {
     });
   } catch (injectError) {
     console.error('Error injecting script:', injectError);
+    // Reset state on failure
+    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
     throw new Error('Could not inject recorder into the page.');
   }
 
@@ -96,31 +103,32 @@ async function startRecording(recordingName) {
   });
 
   if (!response || !response.success) {
+    // Reset state on failure
+    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
     throw new Error(response?.error || 'Failed to start audio capture in the tab.');
   }
 
-  isRecording = true;
   updateBadge(true);
   console.log('Recording started successfully');
 }
 
 async function stopRecording() {
-  if (!isRecording || !recordingData.tabId) {
+  if (!recordingState.isRecording || !recordingState.tabId) {
     console.warn('Stop called but not recording.');
-    isRecording = false;
+    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
     updateBadge(false);
     return { success: false, error: 'No active recording' };
   }
 
   // Send message to recorder.js to stop capture
   try {
-    await chrome.tabs.sendMessage(recordingData.tabId, {
+    await chrome.tabs.sendMessage(recordingState.tabId, {
       action: 'stopCapture'
     });
   } catch (sendError) {
     console.error('Error sending stop message:', sendError);
     // This can happen if the tab was closed. Reset state.
-    isRecording = false;
+    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
     updateBadge(false);
     return { success: false, error: 'Tab was closed or disconnected.' };
   }
@@ -128,33 +136,47 @@ async function stopRecording() {
   return { success: true, message: 'Stop signal sent' };
 }
 
-async function handleRecordingStopped(audioBlobData) {
+async function handleRecordingStopped(audioBlobData, mimeType) {
   console.log('Recording stopped. Processing audio...');
   
   // 1. Convert base64 data URL back to a Blob
   const response = await fetch(audioBlobData);
   const audioBlob = await response.blob();
   
-  console.log('Audio blob created, size:', audioBlob.size);
+  console.log('Audio blob created, size:', audioBlob.size, 'type:', mimeType);
   
   // 2. Reset recording state
-  const recordingName = recordingData.name; // Keep name for filename
-  isRecording = false;
+  const recordingName = recordingState.name; // Keep name for filename
+  recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
   updateBadge(false);
-  recordingData = { name: '', startTime: null, tabId: null };
   
   // 3. Send to local server
-  await processAudioLocal(audioBlob, recordingName);
+  await processAudioLocal(audioBlob, recordingName, mimeType);
 }
 
-// --- This is the new "backend" function ---
-async function processAudioLocal(audioBlob, recordingName) {
+// --- This function contains the FFMPEG BUG FIX ---
+async function processAudioLocal(audioBlob, recordingName, mimeType) {
   try {
     console.log('Sending audio to local server: http://127.0.0.1:5000/upload');
     
     const formData = new FormData();
-    // Create a filename. Using .webm as it's the most likely format.
-    const filename = `${recordingName}.webm`;
+
+    // *** THIS IS THE FFMPEG FIX ***
+    // We determine the correct extension from the mimeType,
+    // not just assume .webm
+    const getExtension = (type) => {
+      if (!type) return 'webm'; // Default fallback
+      if (/webm/.test(type)) return 'webm';
+      if (/ogg/.test(type)) return 'ogg';
+      if (/mp4/.test(type)) return 'mp4';
+      if (/wav/.test(type)) return 'wav';
+      return 'webm'; // Default fallback
+    };
+
+    const extension = getExtension(mimeType);
+    const filename = `${recordingName}.${extension}`;
+    
+    console.log(`Uploading file as: ${filename}`);
     formData.append('audio', audioBlob, filename);
 
     // 1. Upload to the Python server

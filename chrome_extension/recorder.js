@@ -55,7 +55,7 @@ async function startCapture() {
       });
       console.log('[Recorder] Tab audio captured.');
     } catch (tabError) {
-      console.warn('[Recorder] Tab audio capture failed (maybe no audio on tab?):', tabError.message);
+      console.warn('[Recorder] Tab audio capture failed (this is OK if tab has no audio):', tabError.message);
       // We don't throw an error here, we can proceed with mic-only.
       tabStream = null;
     }
@@ -84,9 +84,19 @@ async function startCapture() {
     // 4. Start recording
     audioChunks = [];
     
+    // Let's try to be specific with codecs for better compatibility
     let mimeType = 'audio/webm;codecs=opus';
     if (!MediaRecorder.isTypeSupported(mimeType)) {
+      console.warn('audio/webm;codecs=opus not supported');
       mimeType = 'audio/webm';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        console.warn('audio/webm not supported');
+        mimeType = 'audio/ogg;codecs=opus';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+            console.warn('audio/ogg;codecs=opus not supported');
+            mimeType = ''; // Fallback to browser default
+        }
+      }
     }
     
     console.log('[Recorder] Using mimeType:', mimeType || 'browser default');
@@ -102,7 +112,11 @@ async function startCapture() {
     mediaRecorder.onstop = async () => {
       console.log('[Recorder] Recording stopped, creating blob...');
       
-      const audioBlob = new Blob(audioChunks, { type: mimeType || 'audio/webm' });
+      // *** THIS IS THE FFMPEG FIX ***
+      // We use the recorder's mimeType, or the one we chose,
+      // NOT a hardcoded "audio/webm"
+      const blobMimeType = mediaRecorder.mimeType || mimeType || 'audio/webm';
+      const audioBlob = new Blob(audioChunks, { type: blobMimeType });
       
       console.log('[Recorder] Blob created:', {
         size: audioBlob.size,
@@ -112,10 +126,11 @@ async function startCapture() {
       // Convert to base64 data URL to send to background script
       const reader = new FileReader();
       reader.onloadend = () => {
-        // Send the audio data to the background script
+        // Send the audio data AND the *correct* mimeType
         chrome.runtime.sendMessage({
           action: 'recordingStopped',
-          audioBlob: reader.result // Send as base64
+          audioBlob: reader.result, // Send as base64
+          mimeType: audioBlob.type  // Send the actual blob type
         });
       };
       reader.readAsDataURL(audioBlob);
