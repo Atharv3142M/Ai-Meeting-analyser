@@ -11,7 +11,6 @@ let recordingState = {
 // --- Message Listener ---
 // This is the main router for the extension
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  // --- From popup.js ---
   if (request.action === 'startRecording') {
     startRecording(request.recordingName)
       .then(() => sendResponse({ success: true }))
@@ -33,14 +32,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       isRecording: recordingState.isRecording, 
       recordingData: recordingState.isRecording ? recordingState : null 
     });
-    return true; // Sync response but good practice
+    return true;
 
-  // --- From recorder.js ---
   } else if (request.action === 'recordingStopped') {
-    // Pass the new mimeType variable
+    // This message now comes from offscreen.js
     handleRecordingStopped(request.audioBlob, request.mimeType);
     sendResponse({ success: true });
-    return true; // Indicates async response
+    return true;
   }
 });
 
@@ -49,16 +47,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   if (recordingState.isRecording && recordingState.tabId === tabId) {
     console.warn('Recorded tab was closed! Stopping recording.');
-    // Reset state
-    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
-    updateBadge(false);
-    
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
-      title: 'Recording Stopped',
-      message: 'The tab you were recording was closed.'
-    });
+    stopRecording(); // Gracefully stop and clean up
   }
 });
 
@@ -70,13 +59,12 @@ async function startRecording(recordingName) {
   if (!tab || !tab.id) {
     throw new Error('No active tab found');
   }
-
-  // 2. Check for restricted URLs
-  if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://')) {
-    throw new Error('Cannot record on Chrome internal pages. Please use on a website like google.com.');
+  
+  if (recordingState.isRecording) {
+    throw new Error('Recording is already in progress.');
   }
 
-  // 3. Set global recording state
+  // 2. Set global recording state *before* showing prompt
   recordingState = {
     isRecording: true,
     name: recordingName,
@@ -84,55 +72,48 @@ async function startRecording(recordingName) {
     tabId: tab.id
   };
 
-  // 4. Inject the recorder.js script into the tab
+  // 3. Start Tab Capture
+  // This is the "Share Screen" prompt the user wanted
+  let streamId;
   try {
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      files: ['recorder.js']
+    streamId = await chrome.tabCapture.getMediaStreamId({
+      targetTabId: tab.id
     });
-  } catch (injectError) {
-    console.error('Error injecting script:', injectError);
-    // Reset state on failure
+  } catch (err) {
+    console.error('tabCapture.getMediaStreamId failed:', err);
     recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
-    throw new Error('Could not inject recorder into the page.');
+    throw new Error('Permission denied. You must select a tab to share audio.');
   }
 
-  // 5. Send message to recorder.js to start capture
-  const response = await chrome.tabs.sendMessage(tab.id, {
-    action: 'startCapture'
+  // 4. Start the Offscreen Document to handle recording
+  await setupOffscreenDocument('offscreen.html');
+
+  // 5. Send the streamId to the offscreen document to start the MediaRecorder
+  chrome.runtime.sendMessage({
+    action: 'startOffscreenRecording',
+    streamId: streamId,
+    tabId: tab.id
   });
-
-  if (!response || !response.success) {
-    // Reset state on failure
-    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
-    throw new Error(response?.error || 'Failed to start audio capture in the tab.');
-  }
 
   updateBadge(true);
   console.log('Recording started successfully');
 }
 
 async function stopRecording() {
-  if (!recordingState.isRecording || !recordingState.tabId) {
+  if (!recordingState.isRecording) {
     console.warn('Stop called but not recording.');
-    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
-    updateBadge(false);
     return { success: false, error: 'No active recording' };
   }
 
-  // Send message to recorder.js to stop capture
+  // Send message to offscreen.js to stop capture
   try {
-    await chrome.tabs.sendMessage(recordingState.tabId, {
-      action: 'stopCapture'
-    });
+    await chrome.runtime.sendMessage({ action: 'stopOffscreenRecording' });
   } catch (sendError) {
     console.error('Error sending stop message:', sendError);
-    // This can happen if the tab was closed. Reset state.
-    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
-    updateBadge(false);
-    return { success: false, error: 'Tab was closed or disconnected.' };
+    // This can happen if the offscreen doc was closed.
   }
-  
+
+  // State will be fully reset in handleRecordingStopped
   return { success: true, message: 'Stop signal sent' };
 }
 
@@ -150,7 +131,10 @@ async function handleRecordingStopped(audioBlobData, mimeType) {
   recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
   updateBadge(false);
   
-  // 3. Send to local server
+  // 3. Close the offscreen document
+  await chrome.offscreen.closeDocument();
+  
+  // 4. Send to local server
   await processAudioLocal(audioBlob, recordingName, mimeType);
 }
 
@@ -162,8 +146,7 @@ async function processAudioLocal(audioBlob, recordingName, mimeType) {
     const formData = new FormData();
 
     // *** THIS IS THE FFMPEG FIX ***
-    // We determine the correct extension from the mimeType,
-    // not just assume .webm
+    // We determine the correct extension from the mimeType
     const getExtension = (type) => {
       if (!type) return 'webm'; // Default fallback
       if (/webm/.test(type)) return 'webm';
@@ -220,4 +203,23 @@ function updateBadge(recording) {
   } else {
     chrome.action.setBadgeText({ text: '' });
   }
+}
+
+// --- Offscreen Document Management ---
+async function setupOffscreenDocument(path) {
+  const existingContexts = await chrome.runtime.getContexts({
+    contextTypes: ['OFFSCREEN_DOCUMENT']
+  });
+
+  if (existingContexts.length > 0) {
+    console.log('Offscreen document already exists.');
+    return;
+  }
+
+  console.log('Creating offscreen document...');
+  await chrome.offscreen.createDocument({
+    url: path,
+    reasons: ['USER_MEDIA'],
+    justification: 'To record audio from tabCapture and microphone streams',
+  });
 }
