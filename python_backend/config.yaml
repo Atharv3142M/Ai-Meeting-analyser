@@ -1,0 +1,8 @@
+# This file tells the transcriber and summarizer which local models to use.
+
+transcription:
+  model: "small"  # options: tiny, base, small, medium, large
+                  # 'small' is a great balance of speed and accuracy.
+
+ollama:
+  model: "llama3"  # This MUST match the model name you pulled with Ollama.

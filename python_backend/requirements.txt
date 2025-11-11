@@ -1,0 +1,18 @@
+#Core LangChain packages
+
+langchain
+langchain-ollama
+langchain-community
+
+#Local LLM / Whisper
+
+ollama
+openai-whisper
+
+#YAML for config
+
+pyyaml
+
+#The local web server
+
+Flask
