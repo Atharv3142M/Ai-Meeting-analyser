@@ -1,12 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Local AI Recorder",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Records meeting audio and processes it 100% locally with a local Python server.",
   "permissions": [
     "storage",
     "activeTab",
-    "scripting",
     "notifications",
     "tabs",
     "tabCapture",

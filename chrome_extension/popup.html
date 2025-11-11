@@ -9,7 +9,7 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             width: 400px;
-            min-height: 400px;
+            min-height: 320px;
             background: #f7f7f7;
         }
         .container { background: white; overflow: hidden; }
@@ -38,17 +38,6 @@
             font-size: 13px;
         }
         input[type="text"]:focus { outline: none; border-color: #4b6cb7; }
-        .audio-source {
-            display: flex; align-items: center; gap: 10px; padding: 10px;
-            border: 2px solid #e0e0e0; border-radius: 6px; margin-bottom: 10px;
-        }
-        .audio-indicator {
-            width: 36px; height: 36px; border-radius: 50%; background: #f0f0f0;
-            display: flex; align-items: center; justify-content: center; font-size: 18px;
-        }
-        .audio-indicator.active { background: #4ade80; }
-        .audio-info h3 { font-size: 13px; font-weight: 600; color: #333; }
-        .audio-info p { font-size: 11px; color: #666; }
         .btn {
             width: 100%; padding: 12px; border: none; border-radius: 6px;
             font-size: 14px; font-weight: 600; cursor: pointer;
@@ -90,24 +79,8 @@
                 <p class="help-text">This will be used for the filename.</p>
             </div>
 
-            <div class="form-group">
-                <label>Audio Sources</label>
-                
-                <div class="audio-source">
-                    <div class="audio-indicator active" id="micIndicator">🎤</div>
-                    <div class="audio-info">
-                        <h3>Microphone</h3>
-                        <p id="micStatus">Ready to capture ✓</p>
-                    </div>
-                </div>
-
-                <div class="audio-source">
-                    <div class="audio-indicator active" id="tabIndicator">🔊</div>
-                    <div class="audio-info">
-                        <h3>Tab Audio</h3>
-                        <p id="tabStatus">Ready to capture ✓</p>
-                    </div>
-                </div>
+            <div class.="form-group" id="statusContainer" style="text-align: center; display: none;">
+                <p id="statusMessage" style="font-weight: 500; color: #333;">Waiting...</p>
             </div>
 
             <div class="recording-status" id="recordingStatus">

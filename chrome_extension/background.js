@@ -12,8 +12,8 @@ let recordingState = {
 // This is the main router for the extension
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'startRecording') {
-    startRecording(request.recordingName)
-      .then(() => sendResponse({ success: true }))
+    startRecording(request.recordingName, request.tabId)
+      .then((startTime) => sendResponse({ success: true, startTime }))
       .catch(error => {
         console.error('Start recording error:', error);
         sendResponse({ success: false, error: error.message });
@@ -64,31 +64,40 @@ async function startRecording(recordingName) {
     throw new Error('Recording is already in progress.');
   }
 
-  // 2. Set global recording state *before* showing prompt
+  // 2. Check for restricted URLs
+  if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://')) {
+    throw new Error('Cannot record on Chrome internal pages. Please test on a website like youtube.com.');
+  }
+
+  const startTime = Date.now();
+  // 3. Set global recording state *before* showing prompt
   recordingState = {
     isRecording: true,
     name: recordingName,
-    startTime: Date.now(),
+    startTime: startTime,
     tabId: tab.id
   };
+  
+  console.log('Recording state set. Starting tab capture...');
 
-  // 3. Start Tab Capture
+  // 4. Start Tab Capture
   // This is the "Share Screen" prompt the user wanted
   let streamId;
   try {
     streamId = await chrome.tabCapture.getMediaStreamId({
       targetTabId: tab.id
     });
+    console.log('Got streamId:', streamId);
   } catch (err) {
     console.error('tabCapture.getMediaStreamId failed:', err);
     recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
     throw new Error('Permission denied. You must select a tab to share audio.');
   }
 
-  // 4. Start the Offscreen Document to handle recording
+  // 5. Start the Offscreen Document to handle recording
   await setupOffscreenDocument('offscreen.html');
 
-  // 5. Send the streamId to the offscreen document to start the MediaRecorder
+  // 6. Send the streamId to the offscreen document to start the MediaRecorder
   chrome.runtime.sendMessage({
     action: 'startOffscreenRecording',
     streamId: streamId,
@@ -97,6 +106,7 @@ async function startRecording(recordingName) {
 
   updateBadge(true);
   console.log('Recording started successfully');
+  return startTime;
 }
 
 async function stopRecording() {
@@ -132,7 +142,11 @@ async function handleRecordingStopped(audioBlobData, mimeType) {
   updateBadge(false);
   
   // 3. Close the offscreen document
-  await chrome.offscreen.closeDocument();
+  try {
+    await chrome.offscreen.closeDocument();
+  } catch (e) {
+    console.warn('Offscreen document already closed:', e.message);
+  }
   
   // 4. Send to local server
   await processAudioLocal(audioBlob, recordingName, mimeType);

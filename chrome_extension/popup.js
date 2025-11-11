@@ -6,8 +6,8 @@ const stopBtn = document.getElementById('stopBtn');
 const recordingName = document.getElementById('recordingName');
 const recordingStatus = document.getElementById('recordingStatus');
 const recordingTime = document.getElementById('recordingTime');
-const micStatus = document.getElementById('micStatus');
-const tabStatus = document.getElementById('tabStatus');
+const statusContainer = document.getElementById('statusContainer');
+const statusMessage = document.getElementById('statusMessage');
 
 let recordingInterval;
 let seconds = 0;
@@ -21,9 +21,10 @@ startBtn.addEventListener('click', async () => {
     return;
   }
 
-  // Disable button while starting
+  // Disable button and show status
   startBtn.disabled = true;
-  startBtn.textContent = 'Initializing...';
+  statusMessage.textContent = 'Waiting for permission...';
+  statusContainer.style.display = 'block';
 
   // Send message to background to start
   try {
@@ -32,20 +33,20 @@ startBtn.addEventListener('click', async () => {
       recordingName: name 
     });
     
-    startBtn.disabled = false;
-    startBtn.innerHTML = '<span class="icon">⏺️</span> Start Recording';
-      
     if (response && response.success) {
       // The background script is now in charge.
       // We just update the UI.
-      updateUIToRecording(name, 0);
+      updateUIToRecording(name, response.startTime);
+      // Close the popup window automatically
+      window.close();
     } else if (response && response.error) {
+      // THIS IS THE FIX for the 'Note: ' bug
       alert('Error starting recording: ' + response.error);
+      updateUIToStopped(); // Reset UI
     }
   } catch (error) {
-      alert('Error starting recording: ' + error.message);
-      startBtn.disabled = false;
-      startBtn.innerHTML = '<span class="icon">⏺️</span> Start Recording';
+      alert('Error: ' + error.message);
+      updateUIToStopped(); // Reset UI
   }
 });
 
@@ -72,16 +73,13 @@ stopBtn.addEventListener('click', () => {
 });
 
 // --- UI Update Functions ---
-// These functions ONLY change the popup's appearance
-
 function updateUIToRecording(name, startTime) {
   recordingName.value = name;
   startBtn.style.display = 'none';
   stopBtn.style.display = 'flex';
   recordingStatus.classList.add('active');
   recordingName.disabled = true;
-  micStatus.textContent = 'Capturing audio ✓';
-  tabStatus.textContent = 'Capturing audio ✓';
+  statusContainer.style.display = 'none';
   
   // Calculate elapsed time
   seconds = Math.floor((Date.now() - startTime) / 1000);
@@ -102,18 +100,18 @@ function updateUIToRecording(name, startTime) {
 function updateUIToStopped() {
   if (recordingInterval) clearInterval(recordingInterval);
   startBtn.style.display = 'flex';
+  startBtn.disabled = false;
   stopBtn.style.display = 'none';
   recordingStatus.classList.remove('active');
   recordingName.disabled = false;
   recordingName.value = ''; // Clear name for next time
   recordingTime.textContent = '00:00';
-  micStatus.textContent = 'Ready to capture ✓';
-  tabStatus.textContent = 'Ready to capture ✓';
+  statusContainer.style.display = 'none';
+  statusMessage.textContent = 'Waiting...';
   seconds = 0;
 }
 
 // --- Restore State ---
-// This is the most important part for fixing the popup bug.
 // When the popup opens, it ASKS the background script what the state is.
 async function restoreRecordingState() {
   try {
@@ -128,8 +126,8 @@ async function restoreRecordingState() {
       updateUIToStopped();
     }
   } catch (error) {
+    // This can happen if the background script is not ready (e.g., on extension install)
     console.warn('Could not restore recording state:', error.message);
-    // This can fail if the background script is not ready, which is fine.
     updateUIToStopped();
   }
 }
