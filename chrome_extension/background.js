@@ -47,7 +47,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   if (recordingState.isRecording && recordingState.tabId === tabId) {
     console.warn('Recorded tab was closed! Stopping recording.');
-    stopRecording(); // Gracefully stop and clean up
+    stopRecording().catch(err => console.error('Error stopping after tab close:', err));
   }
 });
 
@@ -65,8 +65,11 @@ async function startRecording(recordingName) {
   }
 
   // 2. Check for restricted URLs
-  if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://')) {
-    throw new Error('Cannot record on Chrome internal pages. Please test on a website like youtube.com.');
+  if (tab.url?.startsWith('chrome://') || 
+      tab.url?.startsWith('chrome-extension://') ||
+      tab.url?.startsWith('edge://') ||
+      tab.url?.startsWith('about:')) {
+    throw new Error('Cannot record on browser internal pages. Please navigate to a website like youtube.com.');
   }
 
   const startTime = Date.now();
@@ -95,14 +98,26 @@ async function startRecording(recordingName) {
   }
 
   // 5. Start the Offscreen Document to handle recording
-  await setupOffscreenDocument('offscreen.html');
+  try {
+    await setupOffscreenDocument('offscreen.html');
+  } catch (err) {
+    console.error('Error setting up offscreen document:', err);
+    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
+    throw new Error('Failed to initialize recording environment.');
+  }
 
   // 6. Send the streamId to the offscreen document to start the MediaRecorder
-  chrome.runtime.sendMessage({
-    action: 'startOffscreenRecording',
-    streamId: streamId,
-    tabId: tab.id
-  });
+  try {
+    await chrome.runtime.sendMessage({
+      action: 'startOffscreenRecording',
+      streamId: streamId,
+      tabId: tab.id
+    });
+  } catch (err) {
+    console.error('Error starting offscreen recording:', err);
+    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
+    throw new Error('Failed to start recording.');
+  }
 
   updateBadge(true);
   console.log('Recording started successfully');
@@ -121,6 +136,7 @@ async function stopRecording() {
   } catch (sendError) {
     console.error('Error sending stop message:', sendError);
     // This can happen if the offscreen doc was closed.
+    // We'll still try to clean up state
   }
 
   // State will be fully reset in handleRecordingStopped
@@ -130,37 +146,49 @@ async function stopRecording() {
 async function handleRecordingStopped(audioBlobData, mimeType) {
   console.log('Recording stopped. Processing audio...');
   
-  // 1. Convert base64 data URL back to a Blob
-  const response = await fetch(audioBlobData);
-  const audioBlob = await response.blob();
-  
-  console.log('Audio blob created, size:', audioBlob.size, 'type:', mimeType);
-  
-  // 2. Reset recording state
-  const recordingName = recordingState.name; // Keep name for filename
-  recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
-  updateBadge(false);
-  
-  // 3. Close the offscreen document
   try {
-    await chrome.offscreen.closeDocument();
-  } catch (e) {
-    console.warn('Offscreen document already closed:', e.message);
+    // 1. Convert base64 data URL back to a Blob
+    const response = await fetch(audioBlobData);
+    const audioBlob = await response.blob();
+    
+    console.log('Audio blob created, size:', audioBlob.size, 'type:', mimeType);
+    
+    // 2. Reset recording state
+    const recordingName = recordingState.name; // Keep name for filename
+    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
+    updateBadge(false);
+    
+    // 3. Close the offscreen document
+    try {
+      await chrome.offscreen.closeDocument();
+    } catch (e) {
+      console.warn('Offscreen document already closed:', e.message);
+    }
+    
+    // 4. Send to local server
+    await processAudioLocal(audioBlob, recordingName, mimeType);
+  } catch (error) {
+    console.error('Error in handleRecordingStopped:', error);
+    // Reset state even on error
+    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
+    updateBadge(false);
+    
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: 'Recording Error',
+      message: 'Failed to process recording: ' + error.message
+    });
   }
-  
-  // 4. Send to local server
-  await processAudioLocal(audioBlob, recordingName, mimeType);
 }
 
-// --- This function contains the FFMPEG BUG FIX ---
 async function processAudioLocal(audioBlob, recordingName, mimeType) {
   try {
     console.log('Sending audio to local server: http://127.0.0.1:5000/upload');
     
     const formData = new FormData();
 
-    // *** THIS IS THE FFMPEG FIX ***
-    // We determine the correct extension from the mimeType
+    // Determine the correct extension from the mimeType
     const getExtension = (type) => {
       if (!type) return 'webm'; // Default fallback
       if (/webm/.test(type)) return 'webm';
@@ -171,40 +199,58 @@ async function processAudioLocal(audioBlob, recordingName, mimeType) {
     };
 
     const extension = getExtension(mimeType);
-    const filename = `${recordingName}.${extension}`;
+    // Sanitize filename to remove invalid characters
+    const sanitizedName = recordingName.replace(/[<>:"/\\|?*]/g, '_');
+    const filename = `${sanitizedName}.${extension}`;
     
-    console.log(`Uploading file as: ${filename}`);
+    console.log(`Uploading file as: ${filename} (type: ${mimeType})`);
     formData.append('audio', audioBlob, filename);
 
-    // 1. Upload to the Python server
+    // Upload to the Python server with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
+
     const response = await fetch('http://127.0.0.1:5000/upload', {
       method: 'POST',
       body: formData,
+      signal: controller.signal
     });
+
+    clearTimeout(timeoutId);
 
     const result = await response.json();
 
     if (!response.ok) {
-      throw new Error(result.error || 'Server returned an error');
+      throw new Error(result.error || `Server returned status ${response.status}`);
     }
 
     console.log('Server response:', result);
 
-    // 2. Notify user of success
+    // Notify user of success
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icons/icon128.png',
       title: 'Processing Complete!',
-      message: `"${recordingName}" was transcribed and summarized successfully.`
+      message: `"${sanitizedName}" was transcribed and summarized successfully.`
     });
 
   } catch (error) {
     console.error('Error processing audio locally:', error);
+    
+    let errorMessage = 'Could not connect or process.';
+    if (error.name === 'AbortError') {
+      errorMessage = 'Upload timed out. File may be too large.';
+    } else if (error.message.includes('Failed to fetch')) {
+      errorMessage = 'Could not connect. Is your Python server running on port 5000?';
+    } else {
+      errorMessage = error.message;
+    }
+    
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icons/icon128.png',
-      title: 'Local Server Error',
-      message: 'Could not connect or process. Is your Python server running?'
+      title: 'Processing Error',
+      message: errorMessage
     });
   }
 }
@@ -237,3 +283,31 @@ async function setupOffscreenDocument(path) {
     justification: 'To record audio from tabCapture and microphone streams',
   });
 }
+
+// Keep service worker alive during recording
+let keepAliveInterval;
+
+function startKeepAlive() {
+  if (keepAliveInterval) return;
+  keepAliveInterval = setInterval(() => {
+    chrome.runtime.getPlatformInfo(() => {
+      // Just to keep the service worker alive
+    });
+  }, 20000); // Every 20 seconds
+}
+
+function stopKeepAlive() {
+  if (keepAliveInterval) {
+    clearInterval(keepAliveInterval);
+    keepAliveInterval = null;
+  }
+}
+
+// Start keep-alive when recording starts
+chrome.runtime.onMessage.addListener((request) => {
+  if (request.action === 'startRecording') {
+    startKeepAlive();
+  } else if (request.action === 'stopRecording') {
+    stopKeepAlive();
+  }
+});

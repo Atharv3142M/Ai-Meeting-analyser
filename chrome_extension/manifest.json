@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Local AI Recorder",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Records meeting audio and processes it 100% locally with a local Python server.",
   "permissions": [
     "storage",
@@ -12,10 +12,12 @@
     "offscreen"
   ],
   "host_permissions": [
-    "http://127.0.0.1:5000/*"
+    "http://127.0.0.1:5000/*",
+    "http://localhost:5000/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "action": {
     "default_popup": "popup.html",

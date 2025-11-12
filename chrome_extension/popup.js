@@ -17,7 +17,7 @@ startBtn.addEventListener('click', async () => {
   const name = recordingName.value.trim();
   
   if (!name) {
-    alert('Please enter a name for the recording.');
+    showAlert('Please enter a name for the recording.');
     return;
   }
 
@@ -37,39 +37,41 @@ startBtn.addEventListener('click', async () => {
       // The background script is now in charge.
       // We just update the UI.
       updateUIToRecording(name, response.startTime);
-      // Close the popup window automatically
-      window.close();
+      // Close the popup window automatically after a short delay
+      setTimeout(() => window.close(), 500);
     } else if (response && response.error) {
-      // THIS IS THE FIX for the 'Note: ' bug
-      alert('Error starting recording: ' + response.error);
-      updateUIToStopped(); // Reset UI
+      showAlert('Error starting recording: ' + response.error);
+      updateUIToStopped();
     }
   } catch (error) {
-      alert('Error: ' + error.message);
-      updateUIToStopped(); // Reset UI
+    showAlert('Error: ' + error.message);
+    updateUIToStopped();
   }
 });
 
 // Stop recording button click
-stopBtn.addEventListener('click', () => {
+stopBtn.addEventListener('click', async () => {
   stopBtn.disabled = true;
   stopBtn.textContent = 'Processing...';
   
-  // Send message to background to stop
-  chrome.runtime.sendMessage(
-    { action: 'stopRecording' },
-    (response) => {
-      stopBtn.disabled = false;
-      stopBtn.innerHTML = '<span class="icon">⏹️</span> Finish Recording';
-      
-      if (response && response.success) {
-        updateUIToStopped();
-        alert('Recording finished!\nSending to local server for processing...\nYou will get a notification when it is complete.');
-      } else if (response && response.error) {
-        alert('Error stopping recording: ' + response.error);
-      }
+  try {
+    // Send message to background to stop
+    const response = await chrome.runtime.sendMessage({ action: 'stopRecording' });
+    
+    stopBtn.disabled = false;
+    stopBtn.innerHTML = '<span class="icon">⏹️</span> Finish Recording';
+    
+    if (response && response.success) {
+      updateUIToStopped();
+      showAlert('Recording finished!\nSending to local server for processing...\nYou will get a notification when it is complete.');
+    } else if (response && response.error) {
+      showAlert('Error stopping recording: ' + response.error);
     }
-  );
+  } catch (error) {
+    stopBtn.disabled = false;
+    stopBtn.innerHTML = '<span class="icon">⏹️</span> Finish Recording';
+    showAlert('Error: ' + error.message);
+  }
 });
 
 // --- UI Update Functions ---
@@ -95,6 +97,12 @@ function updateUIToRecording(name, startTime) {
     recordingTime.textContent = 
       `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   }, 1000);
+  
+  // Update display immediately
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  recordingTime.textContent = 
+    `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
 function updateUIToStopped() {
@@ -109,6 +117,10 @@ function updateUIToStopped() {
   statusContainer.style.display = 'none';
   statusMessage.textContent = 'Waiting...';
   seconds = 0;
+}
+
+function showAlert(message) {
+  alert(message);
 }
 
 // --- Restore State ---

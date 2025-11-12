@@ -36,33 +36,95 @@
             border: 2px solid #e0e0e0;
             border-radius: 6px;
             font-size: 13px;
+            transition: border-color 0.2s;
         }
-        input[type="text"]:focus { outline: none; border-color: #4b6cb7; }
+        input[type="text"]:focus { 
+            outline: none; 
+            border-color: #4b6cb7; 
+        }
+        input[type="text"]:disabled {
+            background: #f5f5f5;
+            cursor: not-allowed;
+        }
         .btn {
-            width: 100%; padding: 12px; border: none; border-radius: 6px;
-            font-size: 14px; font-weight: 600; cursor: pointer;
-            display: flex; align-items: center; justify-content: center; gap: 6px;
+            width: 100%; 
+            padding: 12px; 
+            border: none; 
+            border-radius: 6px;
+            font-size: 14px; 
+            font-weight: 600; 
+            cursor: pointer;
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            gap: 6px;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+        .btn:hover:not(:disabled) {
+            opacity: 0.9;
+        }
+        .btn:active:not(:disabled) {
+            transform: scale(0.98);
         }
         .btn-primary {
             background: linear-gradient(135deg, #4b6cb7 0%, #182848 100%);
             color: white;
         }
-        .btn-danger { background: #ef4444; color: white; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-danger { 
+            background: #ef4444; 
+            color: white; 
+        }
+        .btn:disabled { 
+            opacity: 0.5; 
+            cursor: not-allowed; 
+        }
         .recording-status {
-            text-align: center; padding: 12px; background: #fee2e2;
-            border-radius: 6px; margin-bottom: 12px; display: none;
+            text-align: center; 
+            padding: 12px; 
+            background: #fee2e2;
+            border-radius: 6px; 
+            margin-bottom: 12px; 
+            display: none;
         }
         .recording-status.active { display: block; }
         .recording-dot {
-            display: inline-block; width: 10px; height: 10px;
-            background: #ef4444; border-radius: 50%; margin-right: 6px;
+            display: inline-block; 
+            width: 10px; 
+            height: 10px;
+            background: #ef4444; 
+            border-radius: 50%; 
+            margin-right: 6px;
             animation: blink 1s infinite;
         }
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-        .status-text { font-weight: 600; font-size: 13px; color: #991b1b; }
-        .help-text { font-size: 11px; color: #666; margin-top: 4px; font-style: italic; }
+        @keyframes blink { 
+            0%, 100% { opacity: 1; } 
+            50% { opacity: 0.3; } 
+        }
+        .status-text { 
+            font-weight: 600; 
+            font-size: 13px; 
+            color: #991b1b; 
+        }
+        .help-text { 
+            font-size: 11px; 
+            color: #666; 
+            margin-top: 4px; 
+            font-style: italic; 
+        }
         .icon { font-size: 16px; }
+        #statusContainer {
+            text-align: center;
+            margin-bottom: 12px;
+            padding: 10px;
+            background: #f0f9ff;
+            border-radius: 6px;
+            border: 1px solid #bfdbfe;
+        }
+        #statusMessage {
+            font-weight: 500;
+            color: #1e40af;
+            font-size: 13px;
+        }
     </style>
 </head>
 <body>
@@ -74,13 +136,13 @@
 
         <div class="content">
             <div class="form-group">
-                <label>Recording Name</label>
-                <input type="text" id="recordingName" placeholder="e.g., Weekly Project Sync">
+                <label for="recordingName">Recording Name</label>
+                <input type="text" id="recordingName" placeholder="e.g., Weekly Project Sync" maxlength="100">
                 <p class="help-text">This will be used for the filename.</p>
             </div>
 
-            <div class.="form-group" id="statusContainer" style="text-align: center; display: none;">
-                <p id="statusMessage" style="font-weight: 500; color: #333;">Waiting...</p>
+            <div class="form-group" id="statusContainer" style="display: none;">
+                <p id="statusMessage">Waiting...</p>
             </div>
 
             <div class="recording-status" id="recordingStatus">
@@ -89,7 +151,7 @@
             </div>
 
             <button class="btn btn-primary" id="startBtn">
-                <span class="icon">⏺️</span>
+                <span class="icon">▶️</span>
                 Start Recording
             </button>
 
