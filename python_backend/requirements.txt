@@ -8,8 +8,8 @@ Werkzeug==3.0.1
 
 # AI & Machine Learning
 openai-whisper==20231117
-torch==2.1.2
-torchaudio==2.1.2
+# torch==2.1.2
+# torchaudio==2.1.2
 
 # LangChain for LLM Integration
 langchain==0.1.0
