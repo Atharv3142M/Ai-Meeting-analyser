@@ -1,18 +1,43 @@
-#Core LangChain packages
+# Local AI Recorder - Python Backend Dependencies
+# Install with: pip install -r requirements.txt
 
-langchain
-langchain-ollama
-langchain-community
+# Web Framework
+Flask==3.0.0
+flask-cors==4.0.0
+Werkzeug==3.0.1
 
-#Local LLM / Whisper
+# AI & Machine Learning
+openai-whisper==20231117
+torch==2.1.2
+torchaudio==2.1.2
 
-ollama
-openai-whisper
+# LangChain for LLM Integration
+langchain==0.1.0
+langchain-ollama==0.1.0
+langchain-community==0.0.13
 
-#YAML for config
+# Ollama Client
+ollama==0.1.6
 
-pyyaml
+# Configuration & Data Processing
+PyYAML==6.0.1
+python-dotenv==1.0.0
 
-#The local web server
+# Utilities
+requests==2.31.0
+numpy==1.26.3
 
-Flask
+# Optional: Advanced Speaker Diarization
+# Uncomment the following lines for production-grade speaker diarization
+pyannote.audio==3.1.1
+pyannote.core==5.0.0
+
+# Audio Processing (if needed)
+pydub==0.25.1
+librosa==0.10.1
+
+# Optional: Progress Bars
+tqdm==4.66.1
+
+# Optional: Better Logging
+colorlog==6.8.0

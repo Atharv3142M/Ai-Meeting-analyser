@@ -1,8 +1,120 @@
-# This file tells the transcriber and summarizer which local models to use.
+# Local AI Recorder Configuration File
+# All processing happens 100% locally on your machine
 
+# ============================================================================
+# TRANSCRIPTION SETTINGS (OpenAI Whisper)
+# ============================================================================
 transcription:
-  model: "small"  # options: tiny, base, small, medium, large
-                  # 'small' is a great balance of speed and accuracy.
+  # Whisper model size - affects speed vs accuracy tradeoff
+  # Options: tiny, base, small, medium, large
+  # 
+  # Recommended settings:
+  # - tiny/base: Very fast, good for testing (1-2 GB RAM)
+  # - small: Balanced speed and quality (2-3 GB RAM) ⭐ RECOMMENDED
+  # - medium: High quality, slower (5-6 GB RAM)
+  # - large: Best quality, very slow (10+ GB RAM)
+  model: "small"
+  
+  # Language (optional) - leave as 'auto' to auto-detect
+  # Examples: 'en', 'es', 'fr', 'de', 'ja', 'auto'
+  language: "auto"
 
+# ============================================================================
+# SPEAKER DIARIZATION SETTINGS
+# ============================================================================
+diarization:
+  # Enable speaker identification (who said what)
+  enabled: true
+  
+  # Minimum expected speakers (usually 1-2)
+  min_speakers: 1
+  
+  # Maximum expected speakers (usually 2-10)
+  max_speakers: 10
+  
+  # Pause threshold in seconds to detect speaker changes
+  # Higher = fewer speaker changes detected
+  # Lower = more sensitive to speaker changes
+  pause_threshold: 2.0
+
+# ============================================================================
+# SUMMARIZATION SETTINGS (Ollama)
+# ============================================================================
 ollama:
-  model: "llama3"  # This MUST match the model name you pulled with Ollama.
+  # Ollama model name - must be installed on your system
+  # Install with: ollama pull <model_name>
+  #
+  # Popular options:
+  # - llama3: Meta's LLaMA 3 (8B) - Fast and capable ⭐ RECOMMENDED
+  # - llama3:70b: Larger version - Better quality, slower
+  # - mistral: Fast alternative
+  # - mixtral: High quality alternative
+  # - phi3: Small and fast
+  model: "llama3"
+  
+  # Temperature (0.0 - 1.0)
+  # Lower = more focused and consistent
+  # Higher = more creative and varied
+  temperature: 0.3
+  
+  # Summary style
+  # Options: 'detailed', 'concise', 'bullet_points'
+  style: "detailed"
+
+# ============================================================================
+# SERVER SETTINGS
+# ============================================================================
+server:
+  # Server host (keep as 127.0.0.1 for security)
+  host: "127.0.0.1"
+  
+  # Server port
+  port: 5000
+  
+  # Maximum upload file size in MB
+  max_file_size_mb: 500
+  
+  # Enable CORS for browser extension
+  enable_cors: true
+
+# ============================================================================
+# OUTPUT SETTINGS
+# ============================================================================
+output:
+  # Include timestamps in transcripts
+  include_timestamps: true
+  
+  # Include speaker labels (requires diarization.enabled: true)
+  include_speakers: true
+  
+  # Save metadata JSON files
+  save_metadata: true
+  
+  # Automatically open summary after processing
+  auto_open_summary: false
+
+# ============================================================================
+# PERFORMANCE TUNING
+# ============================================================================
+performance:
+  # Number of threads for Whisper (0 = auto-detect)
+  whisper_threads: 0
+  
+  # Use GPU if available (requires CUDA)
+  use_gpu: true
+  
+  # Batch size for processing (larger = faster but more memory)
+  batch_size: 16
+
+# ============================================================================
+# LOGGING
+# ============================================================================
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+  
+  # Keep logs for this many days
+  retention_days: 30
+  
+  # Maximum log file size in MB
+  max_log_size_mb: 10
