@@ -1,156 +1,157 @@
-import yaml
-import os
+"""
+AI Summarization Module
+Works with structured transcript JSON
+"""
+
 import logging
 from langchain_ollama import OllamaLLM
-from langchain.prompts import PromptTemplate
-import json
 
 logger = logging.getLogger(__name__)
 
-def load_config():
-    """Load configuration from YAML file"""
-    try:
-        with open("config.yaml", "r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
-    except FileNotFoundError:
-        logger.warning("config.yaml not found, using defaults")
-        return {"ollama": {"model": "llama3"}}
 
-def extract_speakers_info(transcript_text):
+def format_transcript_for_summary(transcript_result):
     """
-    Extract speaker information from transcript if available
+    Format transcript JSON for LLM input
     
     Args:
-        transcript_text: Full transcript text
+        transcript_result: Dictionary from transcriber.transcribe()
     
     Returns:
-        dict: Speaker information or None
+        Formatted string for LLM
     """
-    speakers = []
-    lines = transcript_text.split('\n')
+    segments = transcript_result.get('segments', [])
     
-    for line in lines:
-        if line.startswith('Speaker ') and ':' in line:
-            speaker = line.split(':')[0].strip()
-            if speaker not in speakers:
-                speakers.append(speaker)
+    if not segments:
+        return "No transcript available."
     
-    if speakers:
-        return {
-            "speakers_found": True,
-            "speaker_count": len(speakers),
-            "speakers": speakers
-        }
-    return {"speakers_found": False}
+    lines = []
+    current_speaker = None
+    speaker_lines = []
+    
+    for segment in segments:
+        speaker = segment['speaker']
+        text = segment['text']
+        
+        if speaker != current_speaker:
+            if current_speaker and speaker_lines:
+                lines.append(f"{current_speaker}: {' '.join(speaker_lines)}")
+            current_speaker = speaker
+            speaker_lines = [text]
+        else:
+            speaker_lines.append(text)
+    
+    # Add last speaker
+    if current_speaker and speaker_lines:
+        lines.append(f"{current_speaker}: {' '.join(speaker_lines)}")
+    
+    return '\n\n'.join(lines)
 
-def create_summary_prompt(transcript_text, speaker_info):
+
+def create_summary_prompt(transcript_text, num_speakers):
     """
-    Create an enhanced prompt based on whether speakers are identified
+    Create enhanced prompt for LLM
     
     Args:
-        transcript_text: The full transcript
-        speaker_info: Dictionary containing speaker information
+        transcript_text: Formatted transcript text
+        num_speakers: Number of speakers detected
     
     Returns:
-        str: Formatted prompt
+        Prompt string
     """
-    if speaker_info.get("speakers_found"):
-        prompt = f"""You are an expert meeting analyst. Analyze this meeting transcript with identified speakers.
+    if num_speakers > 1:
+        prompt = f"""You are an expert meeting analyst. Analyze this meeting transcript with {num_speakers} identified speakers.
 
 TRANSCRIPT:
 {transcript_text}
 
-ANALYSIS REQUIRED:
+Provide a comprehensive analysis in the following structure:
 
 1. EXECUTIVE SUMMARY
-Provide a concise 2-3 sentence overview of the meeting's purpose and outcomes.
+Write a concise 2-3 sentence overview of the meeting's purpose and outcomes.
 
 2. KEY DISCUSSION POINTS
-List the main topics discussed, organized by importance.
+List the main topics discussed in order of importance. For each point, indicate which speaker(s) were primarily involved.
 
 3. SPEAKER CONTRIBUTIONS
-For each speaker identified, summarize their main points and contributions.
+For each speaker identified in the transcript:
+- Speaker 0: Summarize their main points and role in the discussion
+- Speaker 1: Summarize their main points and role in the discussion
+(Continue for all speakers)
 
 4. DECISIONS MADE
-List any decisions that were made during the meeting.
+List any decisions, agreements, or conclusions reached during the meeting.
 
 5. ACTION ITEMS
-Extract all action items, tasks, or follow-ups mentioned. For each, identify:
-- What needs to be done
-- Who is responsible (if mentioned)
-- Deadline (if mentioned)
+Extract all action items, tasks, or follow-ups mentioned. Format as:
+- Task description [Owner if mentioned] [Deadline if mentioned]
 
 6. OPEN QUESTIONS
-List any unresolved questions or topics that need further discussion.
+List any unresolved questions or topics that require further discussion.
 
 7. NEXT STEPS
 Summarize what should happen after this meeting.
 
-Format your response in a clear, structured manner with headers and bullet points."""
+Format your response with clear headers and bullet points."""
     else:
-        prompt = f"""You are an expert meeting analyst. Analyze this meeting transcript.
+        prompt = f"""You are an expert content analyst. Analyze this audio transcript.
 
 TRANSCRIPT:
 {transcript_text}
 
-ANALYSIS REQUIRED:
+Provide a comprehensive analysis in the following structure:
 
 1. EXECUTIVE SUMMARY
-Provide a concise 2-3 sentence overview of the meeting's purpose and outcomes.
+Write a concise 2-3 sentence overview of the content.
 
-2. KEY DISCUSSION POINTS
-List the main topics discussed in order of importance.
+2. KEY POINTS
+List the main topics or themes discussed in order of importance.
 
-3. DECISIONS MADE
-List any decisions that were made during the meeting.
+3. IMPORTANT HIGHLIGHTS
+Extract the most significant statements, insights, or information.
 
-4. ACTION ITEMS
-Extract all action items, tasks, or follow-ups mentioned. For each action item, include:
-- What needs to be done
-- Who is responsible (if mentioned)
-- Deadline (if mentioned)
+4. ACTION ITEMS (if any)
+List any tasks, follow-ups, or actionable items mentioned.
 
-5. IMPORTANT HIGHLIGHTS
-List key quotes, insights, or important statements made during the meeting.
+5. CONCLUSIONS
+Summarize the main takeaways or conclusions.
 
-6. OPEN QUESTIONS
-List any unresolved questions or topics that need further discussion.
-
-7. NEXT STEPS
-Summarize what should happen after this meeting.
-
-Format your response in a clear, structured manner with headers and bullet points."""
+Format your response with clear headers and bullet points."""
     
     return prompt
 
-def summarize(transcript_file, summary_file=None):
+
+def summarize_from_transcript(transcript_result):
     """
-    Summarize a meeting transcript using Ollama LLM with enhanced analysis.
+    Generate AI summary from transcript result
     
     Args:
-        transcript_file (str): Path to the transcript text file.
-        summary_file (str, optional): Path to save the meeting summary. 
-            If None, generates a filename based on transcript file.
-            
+        transcript_result: Dictionary from transcriber.transcribe()
+    
     Returns:
-        dict: Dictionary containing summary information
+        dict: Summary result with metadata
     """
     try:
-        # Validate input file
-        if not os.path.exists(transcript_file):
-            raise FileNotFoundError(f"Transcript file not found: {transcript_file}")
+        logger.info("Starting AI summarization...")
         
-        # Load configuration
-        cfg = load_config()
-        model_name = cfg.get("ollama", {}).get("model", "llama3")
+        # Extract data
+        num_speakers = transcript_result.get('num_speakers', 1)
+        duration = transcript_result.get('duration', 0)
+        language = transcript_result.get('language', 'unknown')
         
-        logger.info(f"Loading Ollama model '{model_name}'...")
+        # Format transcript for LLM
+        transcript_text = format_transcript_for_summary(transcript_result)
+        
+        if not transcript_text or transcript_text == "No transcript available.":
+            raise ValueError("Empty transcript")
         
         # Initialize LLM
+        model_name = "llama3"  # Can be configured
+        logger.info(f"Loading Ollama model: {model_name}")
+        
         try:
             llm = OllamaLLM(
                 model=model_name,
-                temperature=0.3  # Lower temperature for more focused summaries
+                temperature=0.3  # Lower for more focused summaries
             )
         except Exception as e:
             logger.error(f"Failed to load Ollama model: {e}")
@@ -160,80 +161,65 @@ def summarize(transcript_file, summary_file=None):
                 f"Install with: ollama pull {model_name}"
             )
         
-        # Generate summary file name if not provided
-        if summary_file is None:
-            base_name = os.path.splitext(os.path.basename(transcript_file))[0]
-            base_name = base_name.replace("_transcript", "")
-            summary_file = f"{base_name}_summary.txt"
-        
-        logger.info("Reading transcript...")
-        with open(transcript_file, "r", encoding="utf-8") as f:
-            transcript_text = f.read()
-        
-        if not transcript_text.strip():
-            raise ValueError("Transcript file is empty")
-        
-        # Extract speaker information
-        speaker_info = extract_speakers_info(transcript_text)
-        logger.info(f"Speaker detection: {speaker_info}")
-        
-        # Create enhanced prompt
-        prompt = create_summary_prompt(transcript_text, speaker_info)
-        
-        logger.info("Generating AI summary (this may take a minute)...")
+        # Create prompt
+        prompt = create_summary_prompt(transcript_text, num_speakers)
         
         # Generate summary
-        try:
-            summary = llm.invoke(prompt)
-        except Exception as e:
-            logger.error(f"LLM invocation failed: {e}")
-            raise RuntimeError(f"Failed to generate summary: {e}")
+        logger.info("Generating summary (this may take 30-60 seconds)...")
+        summary = llm.invoke(prompt)
         
-        # Format final output
-        output_lines = []
-        output_lines.append("=" * 80)
-        output_lines.append("MEETING SUMMARY & ANALYSIS")
-        output_lines.append("=" * 80)
-        output_lines.append("")
+        logger.info("Summary generation complete")
         
-        if speaker_info.get("speakers_found"):
-            output_lines.append(f"Participants Detected: {speaker_info['speaker_count']}")
-            output_lines.append(f"Speakers: {', '.join(speaker_info['speakers'])}")
-            output_lines.append("")
-        
-        output_lines.append(summary)
-        output_lines.append("")
-        output_lines.append("=" * 80)
-        output_lines.append(f"Generated by: {model_name}")
-        output_lines.append("=" * 80)
-        
-        # Save summary
-        logger.info(f"Saving summary to: {summary_file}")
-        with open(summary_file, "w", encoding="utf-8") as f:
-            f.write('\n'.join(output_lines))
-        
-        # Save metadata
-        json_file = summary_file.replace('.txt', '_metadata.json')
-        metadata = {
-            "transcript_file": os.path.basename(transcript_file),
+        # Build result
+        result = {
+            "summary": summary,
             "model_used": model_name,
-            "speakers_detected": speaker_info.get("speaker_count", 0),
-            "has_speaker_identification": speaker_info.get("speakers_found", False)
+            "num_speakers": num_speakers,
+            "duration": duration,
+            "language": language
         }
         
-        with open(json_file, "w", encoding="utf-8") as f:
-            json.dump(metadata, f, indent=2)
-        
-        logger.info(f"Metadata saved to: {json_file}")
-        logger.info("Summary generation complete.")
-        
-        return {
-            "summary_path": summary_file,
-            "metadata_path": json_file,
-            "model_used": model_name,
-            "speakers_detected": speaker_info.get("speaker_count", 0)
-        }
+        return result
     
     except Exception as e:
         logger.error(f"Summarization error: {e}", exc_info=True)
         raise
+
+
+def format_summary_for_display(summary_result):
+    """
+    Format summary for display
+    
+    Args:
+        summary_result: Result from summarize_from_transcript()
+    
+    Returns:
+        Formatted string
+    """
+    lines = []
+    lines.append("=" * 80)
+    lines.append("MEETING SUMMARY & ANALYSIS")
+    lines.append("=" * 80)
+    lines.append("")
+    
+    # Metadata
+    num_speakers = summary_result.get('num_speakers', 0)
+    duration = summary_result.get('duration', 0)
+    language = summary_result.get('language', 'unknown')
+    
+    lines.append(f"Speakers Detected: {num_speakers}")
+    lines.append(f"Duration: {int(duration // 60)}m {int(duration % 60)}s")
+    lines.append(f"Language: {language}")
+    lines.append("")
+    lines.append("=" * 80)
+    lines.append("")
+    
+    # Summary content
+    lines.append(summary_result.get('summary', ''))
+    
+    lines.append("")
+    lines.append("=" * 80)
+    lines.append(f"Generated by: {summary_result.get('model_used', 'unknown')}")
+    lines.append("=" * 80)
+    
+    return '\n'.join(lines)

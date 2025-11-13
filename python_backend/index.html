@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local AI Video Recorder - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .transcript-segment {
+            transition: background-color 0.2s;
+            cursor: pointer;
+        }
+        .transcript-segment:hover {
+            background-color: rgb(243 244 246);
+        }
+        .transcript-segment.active {
+            background-color: rgb(219 234 254);
+            border-left: 4px solid rgb(59 130 246);
+        }
+        .speaker-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+        .speaker-0 { background-color: #dbeafe; color: #1e40af; }
+        .speaker-1 { background-color: #fce7f3; color: #9f1239; }
+        .speaker-2 { background-color: #d1fae5; color: #065f46; }
+        .speaker-3 { background-color: #fef3c7; color: #92400e; }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status-completed { background-color: #d1fae5; color: #065f46; }
+        .status-processing { background-color: #fef3c7; color: #92400e; }
+        .status-failed { background-color: #fee2e2; color: #991b1b; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg">
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <h1 class="text-2xl font-bold">🎥 Local AI Video Recorder</h1>
+                <div class="flex gap-4">
+                    <button onclick="refreshRecordings()" class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition">
+                        🔄 Refresh
+                    </button>
+                    <button onclick="showStats()" class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition">
+                        📊 Stats
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-6 py-8">
+        <!-- Gallery View -->
+        <div id="galleryView" class="mb-8">
+            <h2 class="text-3xl font-bold text-gray-800 mb-6">Your Recordings</h2>
+            <div id="recordingsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Recordings will be loaded here -->
+            </div>
+        </div>
+
+        <!-- Player View (Hidden by default) -->
+        <div id="playerView" class="hidden">
+            <button onclick="backToGallery()" class="mb-4 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition">
+                ← Back to Gallery
+            </button>
+
+            <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+                <!-- Recording Header -->
+                <div class="p-6 border-b">
+                    <h2 id="recordingTitle" class="text-2xl font-bold text-gray-800 mb-2"></h2>
+                    <div id="recordingMeta" class="text-sm text-gray-600"></div>
+                </div>
+
+                <!-- Video + Transcript Layout -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-0">
+                    <!-- Video Player -->
+                    <div class="bg-black">
+                        <video id="videoPlayer" class="w-full" controls></video>
+                    </div>
+
+                    <!-- Interactive Transcript -->
+                    <div class="h-96 lg:h-auto overflow-y-auto p-6 bg-gray-50">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-bold text-gray-800">Interactive Transcript</h3>
+                            <button onclick="exportTranscript()" class="text-sm px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
+                                Export
+                            </button>
+                        </div>
+                        <div id="transcriptContainer">
+                            <!-- Transcript segments will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Section -->
+                <div class="p-6 border-t">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">AI Summary</h3>
+                    <div id="summaryContainer" class="prose max-w-none">
+                        <!-- Summary will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Speaker Management -->
+                <div class="p-6 border-t bg-gray-50">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">Speaker Management</h3>
+                    <div id="speakersContainer" class="space-y-2">
+                        <!-- Speakers will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentRecording = null;
+        let currentRecordingId = null;
+
+        // Load recordings on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshRecordings();
+        });
+
+        async function refreshRecordings() {
+            try {
+                const response = await fetch('http://127.0.0.1:5000/recordings');
+                const data = await response.json();
+
+                if (data.success) {
+                    displayRecordings(data.recordings);
+                }
+            } catch (error) {
+                console.error('Error fetching recordings:', error);
+                alert('Could not connect to server. Is it running?');
+            }
+        }
+
+        function displayRecordings(recordings) {
+            const grid = document.getElementById('recordingsGrid');
+            
+            if (recordings.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full text-center py-12">
+                        <p class="text-gray-500 text-lg">No recordings yet</p>
+                        <p class="text-gray-400 text-sm mt-2">Start recording from the Chrome extension!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = recordings.map(rec => `
+                <div class="bg-white rounded-lg shadow hover:shadow-lg transition overflow-hidden cursor-pointer"
+                     onclick="openRecording(${rec.id})">
+                    <div class="aspect-video bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-6xl">
+                        🎥
+                    </div>
+                    <div class="p-4">
+                        <h3 class="font-bold text-lg text-gray-800 mb-2 truncate">${rec.title}</h3>
+                        <div class="flex items-center justify-between text-sm text-gray-600 mb-2">
+                            <span>⏱️ ${formatDuration(rec.duration_seconds)}</span>
+                            <span>💾 ${rec.file_size_mb}MB</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="status-badge status-${rec.status}">${rec.status}</span>
+                            <span class="text-xs text-gray-500">${formatDate(rec.created_at)}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function openRecording(id) {
+            try {
+                const response = await fetch(`http://127.0.0.1:5000/recordings/${id}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    currentRecording = data.recording;
+                    currentRecordingId = id;
+                    displayRecordingDetail(data.recording);
+                }
+            } catch (error) {
+                console.error('Error loading recording:', error);
+                alert('Error loading recording');
+            }
+        }
+
+        function displayRecordingDetail(recording) {
+            // Switch views
+            document.getElementById('galleryView').classList.add('hidden');
+            document.getElementById('playerView').classList.remove('hidden');
+
+            // Set title and meta
+            document.getElementById('recordingTitle').textContent = recording.title;
+            document.getElementById('recordingMeta').innerHTML = `
+                <span class="mr-4">⏱️ ${formatDuration(recording.duration_seconds)}</span>
+                <span class="mr-4">🗣️ ${recording.speakers.length} speakers</span>
+                <span class="mr-4">🌐 ${recording.language}</span>
+                <span>📅 ${formatDate(recording.created_at)}</span>
+            `;
+
+            // Load video
+            const videoPlayer = document.getElementById('videoPlayer');
+            videoPlayer.src = `http://127.0.0.1:5000/video/${recording.id}`;
+
+            // Load transcript
+            if (recording.transcript_json) {
+                const transcript = JSON.parse(recording.transcript_json);
+                displayTranscript(transcript);
+            }
+
+            // Load summary
+            if (recording.summary_text) {
+                document.getElementById('summaryContainer').innerHTML = 
+                    '<pre class="whitespace-pre-wrap text-sm">' + recording.summary_text + '</pre>';
+            }
+
+            // Load speakers
+            displaySpeakers(recording.speakers);
+        }
+
+        function displayTranscript(transcript) {
+            const container = document.getElementById('transcriptContainer');
+            const segments = transcript.segments || [];
+
+            if (segments.length === 0) {
+                container.innerHTML = '<p class="text-gray-500">No transcript available</p>';
+                return;
+            }
+
+            container.innerHTML = segments.map((seg, idx) => `
+                <div class="transcript-segment p-3 mb-2 rounded border border-gray-200" 
+                     data-start="${seg.start}" 
+                     data-end="${seg.end}"
+                     onclick="seekToTime(${seg.start})">
+                    <div class="flex items-start gap-2">
+                        <span class="speaker-badge speaker-${seg.speaker.split(' ')[1] || 0}">
+                            ${seg.speaker}
+                        </span>
+                        <span class="text-xs text-gray-500">${formatTimestamp(seg.start)}</span>
+                    </div>
+                    <p class="mt-2 text-gray-800">${seg.text}</p>
+                </div>
+            `).join('');
+
+            // Highlight active segment as video plays
+            const videoPlayer = document.getElementById('videoPlayer');
+            videoPlayer.addEventListener('timeupdate', () => {
+                const currentTime = videoPlayer.currentTime;
+                const allSegments = document.querySelectorAll('.transcript-segment');
+                
+                allSegments.forEach(seg => {
+                    const start = parseFloat(seg.dataset.start);
+                    const end = parseFloat(seg.dataset.end);
+                    
+                    if (currentTime >= start && currentTime <= end) {
+                        seg.classList.add('active');
+                        // Auto-scroll to active segment
+                        seg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    } else {
+                        seg.classList.remove('active');
+                    }
+                });
+            });
+        }
+
+        function seekToTime(time) {
+            const videoPlayer = document.getElementById('videoPlayer');
+            videoPlayer.currentTime = time;
+            videoPlayer.play();
+        }
+
+        function displaySpeakers(speakers) {
+            const container = document.getElementById('speakersContainer');
+            
+            if (speakers.length === 0) {
+                container.innerHTML = '<p class="text-gray-500">No speakers detected</p>';
+                return;
+            }
+
+            container.innerHTML = speakers.map(speaker => `
+                <div class="flex items-center gap-4 p-3 bg-white rounded border">
+                    <span class="speaker-badge speaker-${speaker.speaker_label.split(' ')[1] || 0}">
+                        ${speaker.speaker_label}
+                    </span>
+                    <input type="text" 
+                           value="${speaker.user_name || ''}" 
+                           placeholder="Enter name..."
+                           class="flex-1 px-3 py-1 border rounded"
+                           onblur="updateSpeakerName('${speaker.speaker_label}', this.value)">
+                    <span class="text-sm text-gray-600">
+                        ${speaker.segment_count} segments, ${formatDuration(speaker.total_duration)}
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        async function updateSpeakerName(speakerLabel, userName) {
+            if (!userName.trim()) return;
+
+            try {
+                const response = await fetch('http://127.0.0.1:5000/speakers/update', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        recording_id: currentRecordingId,
+                        speaker_label: speakerLabel,
+                        user_name: userName
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert(`Updated: ${speakerLabel} → ${userName}`);
+                }
+            } catch (error) {
+                console.error('Error updating speaker:', error);
+            }
+        }
+
+        function backToGallery() {
+            document.getElementById('playerView').classList.add('hidden');
+            document.getElementById('galleryView').classList.remove('hidden');
+            
+            // Stop video
+            document.getElementById('videoPlayer').pause();
+            document.getElementById('videoPlayer').src = '';
+        }
+
+        function exportTranscript() {
+            if (!currentRecording || !currentRecording.transcript_json) return;
+
+            const transcript = JSON.parse(currentRecording.transcript_json);
+            const text = transcript.segments.map(seg => 
+                `[${formatTimestamp(seg.start)}] ${seg.speaker}: ${seg.text}`
+            ).join('\n\n');
+
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentRecording.title}_transcript.txt`;
+            a.click();
+        }
+
+        async function showStats() {
+            try {
+                const response = await fetch('http://127.0.0.1:5000/health');
+                const data = await response.json();
+                
+                if (data.database) {
+                    alert(`Database Stats:\n\nTotal: ${data.database.total_recordings}\nCompleted: ${data.database.completed}\nProcessing: ${data.database.processing}\nFailed: ${data.database.failed}`);
+                }
+            } catch (error) {
+                console.error('Error fetching stats:', error);
+            }
+        }
+
+        // Utility functions
+        function formatDuration(seconds) {
+            if (!seconds) return '0:00';
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function formatTimestamp(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        }
+    </script>
+</body>
+</html>

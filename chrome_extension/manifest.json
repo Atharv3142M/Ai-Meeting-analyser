@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Local AI Recorder",
-  "version": "2.1.0",
-  "description": "Records meeting audio and processes it 100% locally with a local Python server.",
+  "name": "Local AI Video Recorder",
+  "version": "2.0.0",
+  "description": "Records meeting video and audio with speaker identification. 100% local processing.",
   "permissions": [
     "storage",
     "activeTab",

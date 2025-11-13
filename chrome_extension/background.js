@@ -1,6 +1,5 @@
-// Service Worker - Manages recording state and communication with local server
+// Service Worker - Manages recording state and uploads video files
 
-// This is the "source of truth" for the recording state.
 let recordingState = {
   isRecording: false,
   name: '',
@@ -8,8 +7,7 @@ let recordingState = {
   tabId: null
 };
 
-// --- Message Listener ---
-// This is the main router for the extension
+// Message Listener
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'startRecording') {
     startRecording(request.recordingName, request.tabId)
@@ -18,16 +16,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.error('Start recording error:', error);
         sendResponse({ success: false, error: error.message });
       });
-    return true; // Indicates async response
+    return true;
 
   } else if (request.action === 'stopRecording') {
     stopRecording()
       .then(result => sendResponse(result))
       .catch(error => sendResponse({ success: false, error: error.message }));
-    return true; // Indicates async response
+    return true;
 
   } else if (request.action === 'getRecordingStatus') {
-    // Popup is asking for the current state
     sendResponse({ 
       isRecording: recordingState.isRecording, 
       recordingData: recordingState.isRecording ? recordingState : null 
@@ -35,15 +32,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
 
   } else if (request.action === 'recordingStopped') {
-    // This message now comes from offscreen.js
     handleRecordingStopped(request.audioBlob, request.mimeType);
     sendResponse({ success: true });
     return true;
   }
 });
 
-// --- Tab Management ---
-// Stop recording if the tab is closed
+// Tab Management
 chrome.tabs.onRemoved.addListener((tabId) => {
   if (recordingState.isRecording && recordingState.tabId === tabId) {
     console.warn('Recorded tab was closed! Stopping recording.');
@@ -51,10 +46,8 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   }
 });
 
-// --- Core Functions ---
-
+// Start Recording
 async function startRecording(recordingName) {
-  // 1. Get current active tab
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab || !tab.id) {
     throw new Error('No active tab found');
@@ -64,16 +57,15 @@ async function startRecording(recordingName) {
     throw new Error('Recording is already in progress.');
   }
 
-  // 2. Check for restricted URLs
+  // Check for restricted URLs
   if (tab.url?.startsWith('chrome://') || 
       tab.url?.startsWith('chrome-extension://') ||
       tab.url?.startsWith('edge://') ||
       tab.url?.startsWith('about:')) {
-    throw new Error('Cannot record on browser internal pages. Please navigate to a website like youtube.com.');
+    throw new Error('Cannot record on browser internal pages. Please navigate to a website.');
   }
 
   const startTime = Date.now();
-  // 3. Set global recording state *before* showing prompt
   recordingState = {
     isRecording: true,
     name: recordingName,
@@ -83,8 +75,7 @@ async function startRecording(recordingName) {
   
   console.log('Recording state set. Starting tab capture...');
 
-  // 4. Start Tab Capture
-  // This is the "Share Screen" prompt the user wanted
+  // Get streamId with tab permission
   let streamId;
   try {
     streamId = await chrome.tabCapture.getMediaStreamId({
@@ -94,10 +85,10 @@ async function startRecording(recordingName) {
   } catch (err) {
     console.error('tabCapture.getMediaStreamId failed:', err);
     recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
-    throw new Error('Permission denied. You must select a tab to share audio.');
+    throw new Error('Permission denied. You must select a tab to share.');
   }
 
-  // 5. Start the Offscreen Document to handle recording
+  // Setup offscreen document
   try {
     await setupOffscreenDocument('offscreen.html');
   } catch (err) {
@@ -106,7 +97,7 @@ async function startRecording(recordingName) {
     throw new Error('Failed to initialize recording environment.');
   }
 
-  // 6. Send the streamId to the offscreen document to start the MediaRecorder
+  // Start offscreen recording
   try {
     await chrome.runtime.sendMessage({
       action: 'startOffscreenRecording',
@@ -120,7 +111,7 @@ async function startRecording(recordingName) {
   }
 
   updateBadge(true);
-  console.log('Recording started successfully');
+  console.log('Recording started successfully with video + audio monitoring');
   return startTime;
 }
 
@@ -130,46 +121,41 @@ async function stopRecording() {
     return { success: false, error: 'No active recording' };
   }
 
-  // Send message to offscreen.js to stop capture
   try {
     await chrome.runtime.sendMessage({ action: 'stopOffscreenRecording' });
   } catch (sendError) {
     console.error('Error sending stop message:', sendError);
-    // This can happen if the offscreen doc was closed.
-    // We'll still try to clean up state
   }
 
-  // State will be fully reset in handleRecordingStopped
   return { success: true, message: 'Stop signal sent' };
 }
 
-async function handleRecordingStopped(audioBlobData, mimeType) {
-  console.log('Recording stopped. Processing audio...');
+async function handleRecordingStopped(videoBlobData, mimeType) {
+  console.log('Recording stopped. Processing video...');
   
   try {
-    // 1. Convert base64 data URL back to a Blob
-    const response = await fetch(audioBlobData);
-    const audioBlob = await response.blob();
+    // Convert base64 to Blob
+    const response = await fetch(videoBlobData);
+    const videoBlob = await response.blob();
     
-    console.log('Audio blob created, size:', audioBlob.size, 'type:', mimeType);
+    console.log('Video blob created, size:', videoBlob.size, 'type:', mimeType);
     
-    // 2. Reset recording state
-    const recordingName = recordingState.name; // Keep name for filename
+    // Reset recording state
+    const recordingName = recordingState.name;
     recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
     updateBadge(false);
     
-    // 3. Close the offscreen document
+    // Close offscreen document
     try {
       await chrome.offscreen.closeDocument();
     } catch (e) {
       console.warn('Offscreen document already closed:', e.message);
     }
     
-    // 4. Send to local server
-    await processAudioLocal(audioBlob, recordingName, mimeType);
+    // Upload to server
+    await uploadVideoToServer(videoBlob, recordingName, mimeType);
   } catch (error) {
     console.error('Error in handleRecordingStopped:', error);
-    // Reset state even on error
     recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
     updateBadge(false);
     
@@ -182,33 +168,34 @@ async function handleRecordingStopped(audioBlobData, mimeType) {
   }
 }
 
-async function processAudioLocal(audioBlob, recordingName, mimeType) {
+async function uploadVideoToServer(videoBlob, recordingName, mimeType) {
   try {
-    console.log('Sending audio to local server: http://127.0.0.1:5000/upload');
+    console.log('Uploading video to local server: http://127.0.0.1:5000/upload');
     
     const formData = new FormData();
 
-    // Determine the correct extension from the mimeType
+    // Determine extension
     const getExtension = (type) => {
-      if (!type) return 'webm'; // Default fallback
+      if (!type) return 'webm';
       if (/webm/.test(type)) return 'webm';
-      if (/ogg/.test(type)) return 'ogg';
       if (/mp4/.test(type)) return 'mp4';
-      if (/wav/.test(type)) return 'wav';
-      return 'webm'; // Default fallback
+      if (/mkv/.test(type)) return 'mkv';
+      return 'webm';
     };
 
     const extension = getExtension(mimeType);
-    // Sanitize filename to remove invalid characters
     const sanitizedName = recordingName.replace(/[<>:"/\\|?*]/g, '_');
     const filename = `${sanitizedName}.${extension}`;
     
-    console.log(`Uploading file as: ${filename} (type: ${mimeType})`);
-    formData.append('audio', audioBlob, filename);
+    console.log(`Uploading file as: ${filename} (${(videoBlob.size / (1024*1024)).toFixed(2)}MB)`);
+    
+    // Use 'video' key instead of 'audio' for backend
+    formData.append('video', videoBlob, filename);
+    formData.append('title', sanitizedName);
 
-    // Upload to the Python server with timeout
+    // Upload with timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
+    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minute timeout for video
 
     const response = await fetch('http://127.0.0.1:5000/upload', {
       method: 'POST',
@@ -226,16 +213,16 @@ async function processAudioLocal(audioBlob, recordingName, mimeType) {
 
     console.log('Server response:', result);
 
-    // Notify user of success
+    // Notify user
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icons/icon128.png',
-      title: 'Processing Complete!',
-      message: `"${sanitizedName}" was transcribed and summarized successfully.`
+      title: 'Processing Started!',
+      message: `"${sanitizedName}" uploaded successfully. Processing in background...`
     });
 
   } catch (error) {
-    console.error('Error processing audio locally:', error);
+    console.error('Error uploading video:', error);
     
     let errorMessage = 'Could not connect or process.';
     if (error.name === 'AbortError') {
@@ -249,23 +236,21 @@ async function processAudioLocal(audioBlob, recordingName, mimeType) {
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icons/icon128.png',
-      title: 'Processing Error',
+      title: 'Upload Error',
       message: errorMessage
     });
   }
 }
 
-// --- Badge Utility ---
 function updateBadge(recording) {
   if (recording) {
     chrome.action.setBadgeText({ text: '●' });
-    chrome.action.setBadgeBackgroundColor({ color: '#ef4444' }); // Red
+    chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
   } else {
     chrome.action.setBadgeText({ text: '' });
   }
 }
 
-// --- Offscreen Document Management ---
 async function setupOffscreenDocument(path) {
   const existingContexts = await chrome.runtime.getContexts({
     contextTypes: ['OFFSCREEN_DOCUMENT']
@@ -280,20 +265,18 @@ async function setupOffscreenDocument(path) {
   await chrome.offscreen.createDocument({
     url: path,
     reasons: ['USER_MEDIA'],
-    justification: 'To record audio from tabCapture and microphone streams',
+    justification: 'To record video and audio from tab with monitoring capability',
   });
 }
 
-// Keep service worker alive during recording
+// Keep service worker alive
 let keepAliveInterval;
 
 function startKeepAlive() {
   if (keepAliveInterval) return;
   keepAliveInterval = setInterval(() => {
-    chrome.runtime.getPlatformInfo(() => {
-      // Just to keep the service worker alive
-    });
-  }, 20000); // Every 20 seconds
+    chrome.runtime.getPlatformInfo(() => {});
+  }, 20000);
 }
 
 function stopKeepAlive() {
@@ -303,7 +286,6 @@ function stopKeepAlive() {
   }
 }
 
-// Start keep-alive when recording starts
 chrome.runtime.onMessage.addListener((request) => {
   if (request.action === 'startRecording') {
     startKeepAlive();

@@ -1,43 +1,43 @@
-# Local AI Recorder - Python Backend Dependencies
-# Install with: pip install -r requirements.txt
+# Local AI Video Recorder - Production Requirements
+# Python 3.11 Compatible
+# Install torch first: pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118
 
 # Web Framework
 Flask==3.0.0
 flask-cors==4.0.0
 Werkzeug==3.0.1
 
-# AI & Machine Learning
-openai-whisper
-# torch==2.1.2
-# torchaudio==2.1.2
+# Database
+SQLAlchemy==2.0.23
+alembic==1.13.1
 
-# LangChain for LLM Integration
+# AI & Machine Learning (Unpinned for compatibility)
+openai-whisper
+# torch and torchaudio installed separately via CUDA index
+
+# LangChain (Unpinned to avoid conflicts)
 langchain
 langchain-ollama
 langchain-community
 
-# Ollama Client
+# Ollama
 ollama
 
-# Configuration & Data Processing
+# Audio/Video Processing
+ffmpeg-python==0.2.0
+pydub==0.25.1
+
+# Configuration
 PyYAML==6.0.1
 python-dotenv==1.0.0
 
-# Utilities
-requests==2.31.0
+# Utilities (Unpinned for compatibility)
 numpy
-
-# Optional: Advanced Speaker Diarization
-# Uncomment the following lines for production-grade speaker diarization
-pyannote.audio==3.1.1
-pyannote.core==5.0.0
-
-# Audio Processing (if needed)
-pydub==0.25.1
-librosa==0.10.1
-
-# Optional: Progress Bars
+requests==2.31.0
 tqdm==4.66.1
 
-# Optional: Better Logging
+# Logging
 colorlog==6.8.0
+
+# File Handling
+python-magic-bin==0.4.14; platform_system == "Windows"

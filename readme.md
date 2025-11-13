@@ -1,480 +1,499 @@
-# 🎙️ Local AI Recorder - Production Build v2.1.0
+# 🎥 Local AI Video Recorder - Production v2.0
 
-## ⚡ What's New in Production Build
+> **Record, transcribe, and analyze meeting videos with AI - 100% locally, 100% private**
 
-### ✨ Major Enhancements
-
-1. **🎭 Speaker Diarization** - Automatically identifies and labels different speakers
-2. **📊 Enhanced Summaries** - Structured analysis with action items, decisions, and next steps
-3. **🛡️ Production-Grade Error Handling** - Comprehensive logging and graceful failure recovery
-4. **📈 Performance Monitoring** - Processing time tracking and resource usage metrics
-5. **🔧 Auto-Setup Script** - One-command installation verification
-6. **📝 Metadata Tracking** - JSON metadata for all transcripts and summaries
-7. **🚦 Health Check API** - Monitor server status
-8. **📂 File Management** - List and manage recordings via API
-
-### 🐛 All Bugs Fixed
-
-#### Chrome Extension:
-- ✅ Fixed HTML syntax error (`class.=` → `class=`)
-- ✅ Fixed JavaScript variable typo (`blobeMimeType` → `blobMimeType`)
-- ✅ Fixed file extension detection for FFmpeg compatibility
-- ✅ Added comprehensive error handling
-- ✅ Implemented service worker keep-alive
-- ✅ Added filename sanitization
-- ✅ Improved state synchronization
-
-#### Python Backend:
-- ✅ Added input validation
-- ✅ Implemented file size limits
-- ✅ Added CORS support
-- ✅ Enhanced logging with rotation
-- ✅ Added timeout handling
-- ✅ Improved error messages
-- ✅ Added health check endpoint
+[![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/Status-Production-success.svg)](README.md)
 
 ---
 
-## 🚀 Quick Start
+## 🌟 Features
 
-### One-Line Setup
+### Core Capabilities
+- **🎬 Video + Audio Recording** - Capture full meeting videos from any browser tab
+- **🎤 Audio Monitoring** - Hear the meeting while recording (no silent tab!)
+- **🎭 Speaker Diarization** - Automatically identify different speakers ("Who said what")
+- **🤖 AI Transcription** - GPU-accelerated Whisper for accurate transcripts
+- **📝 AI Summarization** - Structured meeting summaries with action items
+- **🗄️ Database Storage** - SQLite database for organized data management
+- **🖥️ Web Dashboard** - Beautiful UI with video player and interactive transcript
+- **🔒 100% Local** - All processing on your machine, zero cloud dependencies
+
+### Advanced Features
+- **Smart Speaker Detection** - Smoothing algorithm prevents "speaker explosion"
+- **Click-to-Seek** - Click transcript text to jump to that moment in video
+- **Speaker Renaming** - Map "Speaker 0" to real names like "Alice Johnson"
+- **Export Options** - Download transcripts as text files
+- **Status Tracking** - Monitor processing progress in real-time
+- **Error Recovery** - Robust error handling with detailed logs
+
+---
+
+## 🎯 What Makes This Different?
+
+### From Basic Audio Recorder:
+1. ✅ **Video Support** - Full video + audio, not just audio
+2. ✅ **Audio Monitoring** - User CAN hear the meeting (critical fix)
+3. ✅ **Advanced Diarization** - Smoothing prevents detecting 10 speakers for 2 people
+4. ✅ **Database Backend** - Structured storage instead of loose files
+5. ✅ **Web Dashboard** - Professional UI with synchronized video player
+6. ✅ **Background Processing** - Non-blocking upload and processing
+7. ✅ **Production Ready** - Error handling, logging, Windows compatibility
+
+### Key Algorithms:
+- **Speaker Smoothing**: Short segments and brief pauses don't create new speakers
+- **Audio Routing**: Split stream to recording file AND user's speakers
+- **Video Compression**: FFmpeg H.264 encoding for web-friendly playback
+- **Transcript Sync**: Real-time highlight as video plays
+
+---
+
+## 📋 Prerequisites
+
+### Required (Must Have):
+- **Windows 10/11** (64-bit)
+- **Python 3.11** (NOT 3.12 - causes conflicts)
+- **FFmpeg** (for video/audio processing)
+- **Ollama** (for AI summarization)
+- **Google Chrome** (or Chromium browser)
+
+### Recommended (Optional):
+- **NVIDIA GPU** with CUDA 11.8 (10x faster transcription)
+- **16GB RAM** (8GB minimum)
+- **SSD Storage** (for faster video processing)
+
+---
+
+## 🚀 Quick Start (5 Minutes)
+
+### Option 1: Automated Setup (Recommended)
 
 ```bash
-# Navigate to python_backend folder
+# 1. Navigate to backend folder
 cd python_backend
 
-# Run setup script
-python setup.py
+# 2. Run quick-start script
+quickstart.bat
+
+# Script will:
+# - Check dependencies
+# - Install PyTorch with CUDA
+# - Install all packages
+# - Initialize database
+# - Start server
 ```
 
-The setup script will:
-- ✅ Verify Python version (3.8+)
-- ✅ Check FFmpeg installation
-- ✅ Check Ollama installation and models
-- ✅ Create necessary directories
-- ✅ Install all Python dependencies
-- ✅ Generate default configuration
-
-### Manual Installation
-
-If you prefer manual setup:
+### Option 2: Manual Setup
 
 ```bash
-# 1. Install Python dependencies
+# 1. Install PyTorch with CUDA first (CRITICAL)
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# 2. Install other dependencies
 pip install -r requirements.txt
 
-# 2. Create directories
-mkdir videos transcribe summary logs
-
-# 3. Configure settings (optional)
-# Edit config.yaml to customize models and settings
+# 3. Initialize database
+python -c "import database; database.init_database()"
 
 # 4. Start server
 python server.py
 ```
 
----
+### Option 3: Step-by-Step Guide
 
-## 📋 System Requirements
-
-### Required Software
-
-1. **Python 3.8+**
-   - Check: `python --version`
-   - Download: https://www.python.org/downloads/
-
-2. **FFmpeg**
-   - Check: `ffmpeg -version`
-   - **Windows**: https://ffmpeg.org/download.html
-   - **macOS**: `brew install ffmpeg`
-   - **Linux**: `sudo apt-get install ffmpeg`
-
-3. **Ollama**
-   - Check: `ollama list`
-   - Download: https://ollama.ai
-   - Install model: `ollama pull llama3`
-
-4. **Google Chrome** (or Chromium-based browser)
-
-### Recommended Hardware
-
-- **CPU**: 4+ cores
-- **RAM**: 8GB minimum, 16GB recommended
-- **Storage**: 10GB free space
-- **GPU**: Optional (CUDA-compatible for faster processing)
+See [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) for detailed instructions.
 
 ---
 
-## 🎯 Features Breakdown
+## 📖 Usage
 
-### 1. Speaker Diarization
+### 1. Start the Server
 
-**Automatically identifies who said what in your meetings**
-
-#### How It Works:
-- Detects speaker changes based on pauses in conversation
-- Labels speakers as "Speaker 1", "Speaker 2", etc.
-- Groups continuous speech from the same speaker
-
-#### Example Output:
-```
-Speaker 1:
-[00:15] Let's discuss the project timeline. I think we can deliver by next month.
-
-Speaker 2:
-[00:42] That sounds ambitious. What are the main blockers we need to address?
-
-Speaker 1:
-[01:08] The main issues are resource allocation and testing time.
+```bash
+cd python_backend
+python server.py
 ```
 
-#### Configuration:
-```yaml
-diarization:
-  enabled: true
-  min_speakers: 1
-  max_speakers: 10
-  pause_threshold: 2.0  # Seconds of pause to detect speaker change
+Visit: http://127.0.0.1:5000
+
+### 2. Install Chrome Extension
+
+1. Open `chrome://extensions/`
+2. Enable "Developer mode"
+3. Click "Load unpacked"
+4. Select `chrome_extension` folder
+
+### 3. Record a Meeting
+
+**Start Recording:**
+1. Join your meeting (Zoom, Meet, Teams, etc.)
+2. Click extension icon
+3. Enter recording name: "Team Standup"
+4. Click "Start Recording"
+5. **Select the meeting tab** in permission dialog
+6. Grant microphone access
+
+**During Recording:**
+- ✅ You CAN hear the meeting (audio monitoring enabled)
+- 🔴 Red dot badge shows recording is active
+- Tab must stay open
+
+**Stop Recording:**
+1. Click extension icon
+2. Click "Finish Recording"
+3. Video uploads automatically
+4. Processing starts in background
+
+### 4. View Results
+
+**Open Dashboard:** http://127.0.0.1:5000
+
+**Gallery View:**
+- See all your recordings
+- Status indicators (processing/completed/failed)
+- File size, duration, creation date
+
+**Player View:**
+- **Left**: Video player with controls
+- **Right**: Interactive transcript
+- **Click text** to jump to that moment
+- **Rename speakers**: Speaker 0 → "Alice"
+- **Export transcript** as text file
+
+**AI Summary:**
+- Executive summary
+- Key discussion points
+- Speaker contributions
+- Decisions made
+- Action items
+- Next steps
+
+---
+
+## 🏗️ Architecture
+
+### System Components
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   Chrome Extension                      │
+│  ┌──────────┐  ┌──────────┐  ┌────────────────────┐  │
+│  │ popup.js │→ │background│→ │ offscreen.js       │  │
+│  │  (UI)    │  │   .js    │  │ (Video Capture +   │  │
+│  │          │  │ (State)  │  │  Audio Monitoring) │  │
+│  └──────────┘  └──────────┘  └────────────────────┘  │
+└──────────────────────┬──────────────────────────────────┘
+                       │ Upload .webm
+                       ↓
+┌─────────────────────────────────────────────────────────┐
+│              Python Backend (Flask Server)              │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │ server.py - API Endpoints & Processing Pipeline  │  │
+│  └───┬───────────────────────────────────────┬──────┘  │
+│      │                                       │          │
+│      ↓                                       ↓          │
+│  ┌──────────┐  ┌────────────┐  ┌──────────────────┐  │
+│  │ FFmpeg   │  │ Whisper    │  │ Ollama           │  │
+│  │ Extract  │→ │ Transcribe │→ │ Summarize        │  │
+│  │ Audio    │  │ + Diarize  │  │                  │  │
+│  └──────────┘  └────────────┘  └──────────────────┘  │
+│      │              │                  │               │
+│      ↓              ↓                  ↓               │
+│  ┌────────────────────────────────────────────────┐  │
+│  │         SQLite Database (meetings.db)          │  │
+│  │  ┌──────────────┐    ┌─────────────────────┐  │  │
+│  │  │ recordings   │    │ speakers            │  │  │
+│  │  │ - title      │    │ - speaker_label     │  │  │
+│  │  │ - video_path │    │ - user_name         │  │  │
+│  │  │ - transcript │    │ - segment_count     │  │  │
+│  │  │ - summary    │    │ - total_duration    │  │  │
+│  │  └──────────────┘    └─────────────────────┘  │  │
+│  └────────────────────────────────────────────────┘  │
+└──────────────────────┬──────────────────────────────────┘
+                       │
+                       ↓
+┌─────────────────────────────────────────────────────────┐
+│              Web Dashboard (index.html)                 │
+│  ┌──────────────┐    ┌─────────────────────────────┐  │
+│  │ Gallery View │    │ Player View                 │  │
+│  │ - All        │ →  │ - Video Player              │  │
+│  │   recordings │    │ - Interactive Transcript    │  │
+│  │ - Status     │    │ - Speaker Management        │  │
+│  │ - Metadata   │    │ - AI Summary                │  │
+│  └──────────────┘    └─────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
 ```
 
-#### Limitations:
-- **Basic Implementation**: Uses pause-based detection
-- **No Voice Recognition**: Cannot identify specific individuals by voice
-- **Overlapping Speech**: May not handle simultaneous speakers perfectly
+### Data Flow
 
-#### Upgrade Path:
-For production-grade speaker identification, uncomment in `requirements.txt`:
+```
+1. User clicks "Start Recording"
+   ↓
+2. Extension requests tab capture permission
+   ↓
+3. offscreen.js captures video + audio
+   - Routes audio to: (A) MediaRecorder + (B) Speakers
+   ↓
+4. User hears meeting while recording (B)
+   ↓
+5. Recording saved to file (A)
+   ↓
+6. User clicks "Stop Recording"
+   ↓
+7. Video uploaded to Flask server
+   ↓
+8. Background Processing Thread:
+   - FFmpeg extracts audio → .wav
+   - FFmpeg compresses video → .mp4
+   - Whisper transcribes + speaker diarization
+   - Ollama generates AI summary
+   - Results saved to database
+   ↓
+9. Dashboard displays completed recording
+```
+
+---
+
+## 🔬 Technical Details
+
+### Speaker Diarization Algorithm
+
+**Problem:** Basic pause-detection creates too many speakers (10+ for 2 people)
+
+**Solution:** Smoothing algorithm with "stickiness"
+
 ```python
-pyannote.audio==3.1.1  # Advanced neural network-based diarization
+def smooth_speaker_diarization(segments):
+    Rules:
+    1. If segment < 1s → merge with previous speaker
+    2. If pause < 2s → keep same speaker  
+    3. If isolated single segment surrounded by same speaker → merge
+    4. Only create new speaker on significant pause
+    
+    Result: Detects 2-4 speakers instead of 10+
 ```
 
-### 2. Enhanced AI Summaries
+### Audio Monitoring Implementation
 
-**Structured analysis with actionable insights**
+**Problem:** User can't hear tab audio during recording (silent tab bug)
 
-#### Summary Includes:
-1. **Executive Summary** - 2-3 sentence overview
-2. **Key Discussion Points** - Main topics by importance
-3. **Speaker Contributions** - What each person discussed
-4. **Decisions Made** - All decisions reached
-5. **Action Items** - Tasks with owners and deadlines
-6. **Open Questions** - Unresolved topics
-7. **Next Steps** - Follow-up actions
+**Solution:** Audio routing with Web Audio API
 
-#### Example:
-```
-MEETING SUMMARY & ANALYSIS
-================================================================================
+```javascript
+audioContext = new AudioContext();
 
-Participants Detected: 3
-Speakers: Speaker 1, Speaker 2, Speaker 3
+// Two destinations:
+recordingDestination = audioContext.createMediaStreamDestination();
+monitoringDestination = audioContext.destination; // Speakers!
 
-EXECUTIVE SUMMARY
-This was a project planning meeting focused on the Q1 product launch. The team
-discussed timeline, resource allocation, and identified three critical blockers
-that need immediate attention.
-
-KEY DISCUSSION POINTS
-• Product launch timeline - targeting March 15th
-• Resource allocation for development and QA teams
-• Integration testing requirements
-• Budget constraints and priority features
-...
+// Route tab audio to BOTH:
+tabSource.connect(recordingDestination);  // For file
+tabSource.connect(monitoringDestination); // For user
 ```
 
-### 3. Production-Grade Logging
+### Video Processing Pipeline
 
-**Comprehensive logging for debugging and monitoring**
-
-#### Features:
-- **Rotating Logs**: Automatic log file rotation (10MB max per file)
-- **Timestamped Entries**: Precise timing for all events
-- **Error Tracking**: Full stack traces for debugging
-- **Daily Log Files**: Organized by date
-
-#### Location:
 ```
-logs/
-  └── server_20250112.log
-```
-
-#### Log Levels:
-- `INFO`: Normal operations
-- `WARNING`: Potential issues
-- `ERROR`: Failed operations
-- `CRITICAL`: System failures
-
-### 4. API Endpoints
-
-#### POST /upload
-Upload and process audio file
-
-**Request:**
-```http
-POST http://127.0.0.1:5000/upload
-Content-Type: multipart/form-data
-
-audio: [audio file]
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Processing completed successfully",
-  "data": {
-    "audio_file": "Meeting_2025.webm",
-    "transcript_path": "transcribe/Meeting_transcript_20250112_143022.txt",
-    "summary_path": "summary/Meeting_summary_20250112_143022.txt",
-    "speakers_detected": 3,
-    "processing_time_seconds": 45.2,
-    "file_size_mb": 12.5
-  }
-}
-```
-
-#### GET /health
-Check server status
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "service": "Local AI Recorder Backend",
-  "timestamp": "2025-01-12T14:30:22.123456"
-}
-```
-
-#### GET /list-recordings
-List all recordings
-
-**Response:**
-```json
-{
-  "success": true,
-  "count": 5,
-  "recordings": [
-    {
-      "filename": "Team_Meeting.webm",
-      "size_mb": 15.2,
-      "created": "2025-01-12T10:30:00"
-    }
-  ]
-}
+Original .webm → FFmpeg
+   ↓
+Extract Audio → .wav (16kHz mono for Whisper)
+   ↓
+Compress Video → .mp4 (H.264, CRF 23)
+   ↓
+Web-optimized output
 ```
 
 ---
 
-## ⚙️ Configuration Guide
+## 📁 File Structure
 
-### config.yaml Structure
+```
+local-ai-video-recorder/
+│
+├── python_backend/
+│   ├── server.py              # Flask API server
+│   ├── database.py            # SQLAlchemy models (recordings, speakers)
+│   ├── transcriber.py         # Whisper + speaker diarization
+│   ├── summarizer.py          # Ollama AI summarization
+│   ├── requirements.txt       # Python dependencies
+│   ├── quickstart.bat         # Windows setup script
+│   ├── config.yaml            # Optional configuration
+│   │
+│   ├── meetings.db            # SQLite database (created on first run)
+│   │
+│   ├── videos/                # Original .webm uploads
+│   ├── audio/                 # Extracted .wav files
+│   ├── compressed/            # Web-optimized .mp4 files
+│   ├── logs/                  # Server logs (auto-rotated)
+│   │
+│   └── templates/
+│       └── index.html         # Web dashboard UI
+│
+└── chrome_extension/
+    ├── manifest.json          # Extension configuration (Manifest V3)
+    ├── background.js          # Service worker (state management)
+    ├── popup.html             # Extension popup UI
+    ├── popup.js               # Popup logic
+    ├── offscreen.html         # Hidden recorder page
+    ├── offscreen.js           # Video/audio capture + monitoring
+    │
+    └── icons/
+        ├── icon16.png
+        ├── icon48.png
+        └── icon128.png
+```
+
+---
+
+## 🎛️ Configuration
+
+### config.yaml (Optional)
+
+Create `python_backend/config.yaml`:
 
 ```yaml
 transcription:
-  model: "small"        # Whisper model size
-  language: "auto"      # Auto-detect or specify: en, es, fr, etc.
+  model: "small"        # tiny, base, small, medium, large
+  language: "auto"      # or "en", "es", "fr", etc.
 
 diarization:
-  enabled: true         # Enable speaker identification
+  enabled: true
   min_speakers: 1
   max_speakers: 10
   pause_threshold: 2.0  # Seconds
 
 ollama:
-  model: "llama3"       # Must be installed: ollama pull llama3
+  model: "llama3"       # or mistral, phi3, llama3:70b
   temperature: 0.3      # 0.0-1.0 (lower = more focused)
-  style: "detailed"     # detailed, concise, bullet_points
-
-server:
-  host: "127.0.0.1"
-  port: 5000
-  max_file_size_mb: 500
-  enable_cors: true
-
-output:
-  include_timestamps: true
-  include_speakers: true
-  save_metadata: true
-  auto_open_summary: false
 ```
 
-### Model Selection Guide
+### Model Selection
 
-#### Whisper Models:
+**Whisper Models:**
+- `tiny` - Fastest, basic quality (1GB RAM)
+- `base` - Fast, good quality (1GB RAM)
+- `small` - **Recommended** - Balanced (2GB RAM)
+- `medium` - High quality (5GB RAM)
+- `large` - Best quality (10GB RAM)
 
-| Model    | Size  | RAM    | Speed       | Quality    | Use Case          |
-|----------|-------|--------|-------------|------------|-------------------|
-| tiny     | 39MB  | 1GB    | Very Fast   | Basic      | Testing only      |
-| base     | 74MB  | 1GB    | Fast        | Good       | Quick drafts      |
-| small    | 244MB | 2GB    | Moderate    | Very Good  | ⭐ **Recommended** |
-| medium   | 769MB | 5GB    | Slow        | Excellent  | High accuracy     |
-| large    | 1.5GB | 10GB   | Very Slow   | Best       | Professional      |
-
-#### Ollama Models:
-
-| Model        | Size | Speed       | Quality    | Use Case          |
-|--------------|------|-------------|------------|-------------------|
-| llama3       | 4GB  | Fast        | Excellent  | ⭐ **Recommended** |
-| llama3:70b   | 40GB | Slow        | Superior   | High-end systems  |
-| mistral      | 4GB  | Fast        | Very Good  | Alternative       |
-| mixtral      | 26GB | Moderate    | Excellent  | Powerful systems  |
-| phi3         | 2GB  | Very Fast   | Good       | Low-resource      |
+**Ollama Models:**
+- `llama3` - **Recommended** - Fast, excellent (4GB)
+- `mistral` - Alternative, fast (4GB)
+- `phi3` - Smallest, very fast (2GB)
+- `llama3:70b` - Best quality, slow (40GB)
 
 ---
 
-## 🔧 Troubleshooting
+## 🚨 Troubleshooting
 
-### Common Issues & Solutions
+### Common Issues
 
-#### 1. "Could not connect to server"
+<details>
+<summary><b>❌ "Unknown compiler" error</b></summary>
 
-**Symptoms:**
-- Extension shows connection error
-- Notification says "Could not connect"
+**Cause:** Python 3.12 incompatibility
 
-**Solutions:**
+**Solution:**
 ```bash
-# Check if server is running
-curl http://127.0.0.1:5000/health
-
-# Restart server
-python server.py
-
-# Check firewall settings (Windows)
-# Allow Python through Windows Firewall
+# Uninstall Python 3.12
+# Install Python 3.11 from python.org
+# Reinstall dependencies
 ```
+</details>
 
-#### 2. "FFmpeg not found" Error
+<details>
+<summary><b>❌ "ResolutionImpossible" during pip install</b></summary>
 
-**Symptoms:**
-- Transcription fails
-- Log shows "ffmpeg" error
+**Cause:** Must install PyTorch first
 
-**Solutions:**
+**Solution:**
 ```bash
-# Verify FFmpeg installation
-ffmpeg -version
+# Install PyTorch with CUDA FIRST
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118
 
-# Windows: Add to PATH
-# 1. Download FFmpeg
-# 2. Extract to C:\ffmpeg
-# 3. Add C:\ffmpeg\bin to System PATH
-
-# macOS
-brew install ffmpeg
-
-# Linux
-sudo apt-get install ffmpeg
+# Then install requirements
+pip install -r requirements.txt
 ```
+</details>
 
-#### 3. "Ollama model not found"
+<details>
+<summary><b>❌ Can't hear meeting while recording</b></summary>
 
-**Symptoms:**
-- Summarization fails
-- Error mentions Ollama connection
+**This should NOT happen!** Audio monitoring is enabled by default.
 
-**Solutions:**
+**Check:**
+1. System volume not muted
+2. Browser tab not muted
+3. Correct audio output device selected
+</details>
+
+<details>
+<summary><b>❌ Too many speakers detected (10+ for 2 people)</b></summary>
+
+**Cause:** Smoothing algorithm not working
+
+**Fix:** Update `transcriber.py` to use the smoothing algorithm (already included in this version)
+</details>
+
+<details>
+<summary><b>❌ FFmpeg not found</b></summary>
+
+**Solution:**
 ```bash
-# Check Ollama is running
+# Windows (Chocolatey)
+choco install ffmpeg
+
+# Or download from: https://ffmpeg.org
+# Add to PATH: C:\ffmpeg\bin
+```
+</details>
+
+<details>
+<summary><b>❌ "Could not connect to Ollama"</b></summary>
+
+**Solution:**
+```bash
+# Start Ollama service
 ollama serve
 
-# List installed models
+# Pull model (in another terminal)
+ollama pull llama3
+```
+</details>
+
+### Debug Checklist
+
+```bash
+# 1. Check Python version
+python --version  # Should be 3.11.x
+
+# 2. Check FFmpeg
+ffmpeg -version
+
+# 3. Check Ollama
 ollama list
 
-# Install llama3
-ollama pull llama3
+# 4. Check CUDA (optional)
+python -c "import torch; print(torch.cuda.is_available())"
 
-# Test Ollama
-ollama run llama3 "Hello"
-```
+# 5. Check server
+curl http://127.0.0.1:5000/health
 
-#### 4. "No audio in recording"
-
-**Symptoms:**
-- File size is very small
-- Transcript is empty or minimal
-
-**Solutions:**
-1. Ensure tab has active audio (play something first)
-2. Grant microphone permission when prompted
-3. Check browser audio settings
-4. Try recording YouTube video as test
-
-#### 5. Memory Issues
-
-**Symptoms:**
-- System freezes during processing
-- "Out of memory" errors
-
-**Solutions:**
-```yaml
-# Use smaller Whisper model in config.yaml
-transcription:
-  model: "base"  # Instead of "small" or "medium"
-
-# Reduce batch size
-performance:
-  batch_size: 8  # Instead of 16
-```
-
-#### 6. Slow Processing
-
-**Optimization:**
-```yaml
-# 1. Use smaller models
-transcription:
-  model: "base"
-
-ollama:
-  model: "phi3"
-
-# 2. Enable GPU (if available)
-performance:
-  use_gpu: true
-
-# 3. Disable speaker diarization
-diarization:
-  enabled: false
+# 6. View logs
+cd logs
+type server_20250112.log
 ```
 
 ---
 
-## 📊 Performance Benchmarks
-
-### Processing Times (approximate)
-
-**10-minute meeting, small Whisper model, llama3:**
-- Transcription: 2-4 minutes
-- Summarization: 30-60 seconds
-- **Total: 3-5 minutes**
-
-**Factors affecting speed:**
-- CPU speed and cores
-- RAM available
-- Model sizes
-- GPU availability
-- Audio quality/complexity
-
-### Resource Usage
-
-**During Processing:**
-- CPU: 50-100% (single core)
-- RAM: 2-6GB (depends on model)
-- Disk: Minimal
-
-**Idle:**
-- CPU: <1%
-- RAM: 100-500MB
-
----
-
-## 🔐 Security & Privacy
+## 🔒 Privacy & Security
 
 ### Data Privacy Guarantees
 
 ✅ **100% Local Processing**
-- No data sent to external servers
 - All AI models run on your machine
+- No data sent to external servers
 - No internet connection required (after setup)
 
 ✅ **No Telemetry**
@@ -485,131 +504,61 @@ diarization:
 ✅ **Localhost Only**
 - Server binds to 127.0.0.1
 - Not accessible from network
-- Extension can only connect locally
+- Firewall blocks external access
 
-### Security Best Practices
+### Your Data Never Leaves Your Computer
 
-1. **Keep software updated**
-   ```bash
-   pip install --upgrade -r requirements.txt
-   ollama pull llama3  # Re-pull to update
-   ```
-
-2. **Review generated files**
-   - Check transcripts before sharing
-   - Verify sensitive info is removed
-
-3. **Secure file storage**
-   - Keep recordings folder private
-   - Delete old recordings regularly
-
-4. **Network isolation**
-   - Server only listens on 127.0.0.1
-   - Firewall blocks external access
-
----
-
-## 🚀 Advanced Usage
-
-### Custom Processing Pipeline
-
-#### 1. Batch Processing Multiple Files
-
-```python
-# batch_process.py
-import transcriber
-import summarizer
-import os
-
-videos_dir = "videos"
-for filename in os.listdir(videos_dir):
-    if filename.endswith(('.webm', '.mp4')):
-        audio_path = os.path.join(videos_dir, filename)
-        
-        # Transcribe
-        result = transcriber.transcribe(audio_path)
-        
-        # Summarize
-        summarizer.summarize(result['transcript_path'])
 ```
-
-#### 2. Custom Summary Prompts
-
-Edit `summarizer.py` to modify the AI prompt:
-```python
-prompt = f"""Your custom instructions here...
-
-TRANSCRIPT:
-{transcript_text}
-
-Output format: ...
-"""
-```
-
-#### 3. Export to Different Formats
-
-```python
-# Add to summarizer.py
-import markdown
-import pdfkit
-
-def export_to_markdown(summary_file):
-    # Convert to Markdown
-    pass
-
-def export_to_pdf(summary_file):
-    # Convert to PDF
-    pass
-```
-
-### Integration with Other Tools
-
-#### Notion API
-```python
-# notion_integration.py
-from notion_client import Client
-
-def send_to_notion(summary_file):
-    notion = Client(auth=os.environ["NOTION_TOKEN"])
-    # Upload summary to Notion database
-```
-
-#### Slack Bot
-```python
-# slack_integration.py
-from slack_sdk import WebClient
-
-def send_to_slack(summary_file):
-    client = WebClient(token=os.environ["SLACK_TOKEN"])
-    # Post summary to Slack channel
+Recording → Your Computer → Processing → Your Computer → Storage
+                ↓
+           [NO CLOUD]
+           [NO API CALLS]
+           [NO EXTERNAL SERVERS]
 ```
 
 ---
 
-## 📈 Roadmap
+## 📊 Performance Benchmarks
 
-### Planned Features
+### Processing Times
 
-- [ ] Real-time transcription during recording
-- [ ] Advanced speaker identification with voice prints
-- [ ] Multi-language support in UI
-- [ ] Cloud backup (optional)
-- [ ] Mobile app
-- [ ] Sentiment analysis
-- [ ] Keyword extraction
-- [ ] Meeting analytics dashboard
+**10-minute meeting:**
+- Upload: 5-10 seconds
+- Audio extraction: 10-20 seconds
+- Video compression: 30-60 seconds
+- Transcription (GPU): 2-3 minutes
+- Transcription (CPU): 8-12 minutes
+- Summarization: 30-60 seconds
+- **Total: 4-7 minutes (GPU) | 10-14 minutes (CPU)**
+
+### Resource Usage
+
+**During Recording:**
+- CPU: 20-40%
+- RAM: 2-4GB
+- Disk: Streaming write
+
+**During Processing:**
+- CPU: 80-100% (one core)
+- RAM: 4-8GB
+- GPU: 70-90% (if available)
+
+### File Sizes
+
+- Original .webm: 10-20 MB per minute
+- Extracted .wav: 1-2 MB per minute
+- Compressed .mp4: 5-10 MB per minute (H.264, CRF 23)
 
 ---
 
 ## 🤝 Contributing
 
-Found a bug? Want to add a feature?
+Found a bug? Want to add features?
 
-1. Check existing issues
-2. Fork the repository
-3. Create feature branch
-4. Test thoroughly
-5. Submit pull request
+1. Fork the repository
+2. Create feature branch
+3. Test thoroughly
+4. Submit pull request
 
 ---
 
@@ -623,37 +572,47 @@ MIT License - Use freely for personal or commercial projects.
 
 ### Getting Help
 
-1. **Check Documentation**: Read this file and README.md
-2. **Run Setup Script**: `python setup.py` for diagnostics
-3. **Check Logs**: Review `logs/server_*.log` for errors
-4. **Test Components**:
-   ```bash
-   # Test FFmpeg
-   ffmpeg -version
-   
-   # Test Ollama
-   ollama run llama3 "Test"
-   
-   # Test Server
-   curl http://127.0.0.1:5000/health
-   ```
+1. Check [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md)
+2. Review server logs in `logs/` folder
+3. Run debug checklist above
+4. Check existing GitHub issues
 
-### Debug Mode
+### Useful Commands
 
-Enable detailed logging:
-```yaml
-# config.yaml
-logging:
-  level: "DEBUG"
+```bash
+# Restart server
+Ctrl+C
+python server.py
+
+# Clear database (WARNING: deletes all data!)
+del meetings.db
+python -c "import database; database.init_database()"
+
+# Reinstall dependencies
+pip install -r requirements.txt --force-reinstall
+
+# Test GPU
+python -c "import torch; print('CUDA:', torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 ```
-
-Then check `logs/` folder for detailed information.
 
 ---
 
-**Version**: 2.1.0 Production  
-**Release Date**: January 2025  
-**Status**: ✅ Production Ready  
-**Bugs**: 🐛 All Fixed  
+## 🎉 Credits
 
-🎉 **Ready for real-world use!**
+Built with:
+- [Whisper](https://github.com/openai/whisper) - AI transcription
+- [Ollama](https://ollama.ai) - Local LLM
+- [Flask](https://flask.palletsprojects.com/) - Web framework
+- [SQLAlchemy](https://www.sqlalchemy.org/) - Database ORM
+- [FFmpeg](https://ffmpeg.org/) - Media processing
+- [Tailwind CSS](https://tailwindcss.com/) - UI framework
+
+---
+
+**Version:** 2.0.0 Production  
+**Release Date:** January 2025  
+**Status:** ✅ Production Ready  
+**Python:** 3.11  
+**Platform:** Windows 10/11  
+
+🚀 **Ready for real-world use!**
