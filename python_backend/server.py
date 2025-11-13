@@ -266,10 +266,10 @@ def print_startup_banner():
   Health Check: http://127.0.0.1:5000/health
   
   Features:
-  ✓ Whisper Transcription with Speaker Diarization
-  ✓ AI-Powered Summarization
-  ✓ 100% Local & Private Processing
-  ✓ No External API Calls
+  + Whisper Transcription with Speaker Diarization
+  + AI-Powered Summarization
+  + 100% Local & Private Processing
+  + No External API Calls
   
   Output Directories:
   - Audio Files: {os.path.abspath(VIDEOS_DIR)}

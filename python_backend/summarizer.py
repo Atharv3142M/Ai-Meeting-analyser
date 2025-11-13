@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 def load_config():
     """Load configuration from YAML file"""
     try:
-        with open("config.yaml", "r") as f:
+        with open("config.yaml", "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
     except FileNotFoundError:
         logger.warning("config.yaml not found, using defaults")
