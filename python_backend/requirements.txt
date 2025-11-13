@@ -17,7 +17,7 @@ langchain-ollama
 langchain-community
 
 # Ollama Client
-ollama==0.1.6
+ollama
 
 # Configuration & Data Processing
 PyYAML==6.0.1
