@@ -1,123 +1,232 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Local AI Video Recorder - Dashboard</title>
+    <title>POAi - Productivity Optimization Assistant AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <style>
+        @keyframes shimmer {
+            0% { background-position: -1000px 0; }
+            100% { background-position: 1000px 0; }
+        }
+        .skeleton {
+            animation: shimmer 2s infinite;
+            background: linear-gradient(90deg, #1f2937 0%, #374151 50%, #1f2937 100%);
+            background-size: 1000px 100%;
+        }
         .transcript-segment {
-            transition: background-color 0.2s;
+            transition: all 0.2s;
             cursor: pointer;
         }
         .transcript-segment:hover {
-            background-color: rgb(243 244 246);
+            background-color: rgb(31 41 55);
         }
         .transcript-segment.active {
-            background-color: rgb(219 234 254);
+            background-color: rgb(30 58 138);
             border-left: 4px solid rgb(59 130 246);
         }
-        .speaker-badge {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-right: 8px;
+        .modal-overlay {
+            backdrop-filter: blur(4px);
         }
-        .speaker-0 { background-color: #dbeafe; color: #1e40af; }
-        .speaker-1 { background-color: #fce7f3; color: #9f1239; }
-        .speaker-2 { background-color: #d1fae5; color: #065f46; }
-        .speaker-3 { background-color: #fef3c7; color: #92400e; }
-        .status-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 9999px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        .status-completed { background-color: #d1fae5; color: #065f46; }
-        .status-processing { background-color: #fef3c7; color: #92400e; }
-        .status-failed { background-color: #fee2e2; color: #991b1b; }
     </style>
 </head>
-<body class="bg-gray-50">
-    <!-- Navigation -->
-    <nav class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg">
-        <div class="container mx-auto px-6 py-4">
-            <div class="flex items-center justify-between">
-                <h1 class="text-2xl font-bold">🎥 Local AI Video Recorder</h1>
-                <div class="flex gap-4">
-                    <button onclick="refreshRecordings()" class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition">
-                        🔄 Refresh
+<body class="bg-gray-900 text-gray-100">
+    
+    <!-- Main Layout -->
+    <div class="flex h-screen overflow-hidden">
+        
+        <!-- Sidebar -->
+        <aside class="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
+            <!-- Logo -->
+            <div class="p-6 border-b border-gray-700">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-xl">
+                        P
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold text-white">POAi</h1>
+                        <p class="text-xs text-gray-400">v2.0 Production</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Navigation -->
+            <nav class="flex-1 p-4 space-y-2">
+                <a href="#" onclick="showGallery(); return false;" 
+                   class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-700 transition text-gray-300 hover:text-white">
+                    <span class="text-xl">🎥</span>
+                    <span class="font-medium">Recordings</span>
+                </a>
+                <a href="#" onclick="showStats(); return false;"
+                   class="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-700 transition text-gray-300 hover:text-white">
+                    <span class="text-xl">📊</span>
+                    <span class="font-medium">Statistics</span>
+                </a>
+            </nav>
+            
+            <!-- Footer -->
+            <div class="p-4 border-t border-gray-700">
+                <button onclick="refreshRecordings()" 
+                        class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition text-white font-medium">
+                    🔄 Refresh
+                </button>
+                <div class="mt-3 text-xs text-gray-500 text-center">
+                    100% Local & Private
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 overflow-y-auto">
+            
+            <!-- Gallery View -->
+            <div id="galleryView" class="p-8">
+                <div class="mb-8">
+                    <h2 class="text-3xl font-bold text-white mb-2">Your Recordings</h2>
+                    <p class="text-gray-400">AI-powered meeting analysis</p>
+                </div>
+                
+                <div id="recordingsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Loading skeletons -->
+                    <div class="skeleton h-64 rounded-xl"></div>
+                    <div class="skeleton h-64 rounded-xl"></div>
+                    <div class="skeleton h-64 rounded-xl"></div>
+                </div>
+            </div>
+
+            <!-- Player View -->
+            <div id="playerView" class="hidden p-8">
+                <button onclick="backToGallery()" 
+                        class="mb-6 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg transition text-white flex items-center gap-2">
+                    <span>←</span> Back to Gallery
+                </button>
+
+                <div class="bg-gray-800 rounded-xl overflow-hidden border border-gray-700">
+                    <!-- Header -->
+                    <div class="p-6 border-b border-gray-700">
+                        <h2 id="recordingTitle" class="text-2xl font-bold text-white mb-2"></h2>
+                        <div id="recordingMeta" class="flex flex-wrap gap-4 text-sm text-gray-400"></div>
+                    </div>
+
+                    <!-- Video + Transcript -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2">
+                        <!-- Video Player -->
+                        <div class="bg-black aspect-video lg:aspect-auto">
+                            <video id="videoPlayer" class="w-full h-full" controls></video>
+                        </div>
+
+                        <!-- Transcript Panel -->
+                        <div class="h-96 lg:h-auto overflow-y-auto bg-gray-900 border-l border-gray-700">
+                            <!-- Tab Navigation -->
+                            <div class="sticky top-0 bg-gray-800 border-b border-gray-700 flex">
+                                <button onclick="switchTab('transcript')" id="transcriptTab"
+                                        class="tab-button flex-1 px-6 py-4 font-medium transition border-b-2 border-blue-500 text-blue-500">
+                                    📝 Transcript
+                                </button>
+                                <button onclick="switchTab('summary')" id="summaryTab"
+                                        class="tab-button flex-1 px-6 py-4 font-medium transition border-b-2 border-transparent text-gray-400 hover:text-gray-300">
+                                    🤖 AI Summary
+                                </button>
+                            </div>
+
+                            <!-- Tab Content -->
+                            <div class="p-6">
+                                <!-- Transcript Tab -->
+                                <div id="transcriptContent" class="tab-content">
+                                    <div class="flex justify-between items-center mb-4">
+                                        <h3 class="text-lg font-semibold text-white">Interactive Transcript</h3>
+                                        <button onclick="exportTranscript()" 
+                                                class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white transition">
+                                            Export
+                                        </button>
+                                    </div>
+                                    <div id="transcriptContainer"></div>
+                                </div>
+
+                                <!-- Summary Tab -->
+                                <div id="summaryContent" class="tab-content hidden">
+                                    <h3 class="text-lg font-semibold text-white mb-4">AI Analysis</h3>
+                                    <div id="summaryContainer" class="prose prose-invert max-w-none"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Speaker Management -->
+                    <div class="p-6 border-t border-gray-700 bg-gray-800">
+                        <h3 class="text-xl font-bold text-white mb-4">👥 Speaker Management</h3>
+                        <p class="text-sm text-gray-400 mb-4">Click speaker labels to rename them</p>
+                        <div id="speakersContainer" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Rename Speaker Modal -->
+    <div id="renameModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+        <div class="modal-overlay fixed inset-0 bg-black bg-opacity-75" onclick="closeRenameModal()"></div>
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="relative bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 border border-gray-700">
+                <h3 class="text-xl font-bold text-white mb-4">Rename Speaker</h3>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Speaker Label</label>
+                    <input type="text" id="modalSpeakerLabel" readonly
+                           class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-400">
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Display Name</label>
+                    <input type="text" id="modalDisplayName" placeholder="e.g., Alice Johnson"
+                           class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none">
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="closeRenameModal()" 
+                            class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white transition">
+                        Cancel
                     </button>
-                    <button onclick="showStats()" class="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition">
-                        📊 Stats
+                    <button onclick="saveRename()" 
+                            class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium transition">
+                        Save
                     </button>
                 </div>
             </div>
         </div>
-    </nav>
+    </div>
 
-    <!-- Main Content -->
-    <div class="container mx-auto px-6 py-8">
-        <!-- Gallery View -->
-        <div id="galleryView" class="mb-8">
-            <h2 class="text-3xl font-bold text-gray-800 mb-6">Your Recordings</h2>
-            <div id="recordingsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- Recordings will be loaded here -->
-            </div>
-        </div>
-
-        <!-- Player View (Hidden by default) -->
-        <div id="playerView" class="hidden">
-            <button onclick="backToGallery()" class="mb-4 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition">
-                ← Back to Gallery
-            </button>
-
-            <div class="bg-white rounded-lg shadow-lg overflow-hidden">
-                <!-- Recording Header -->
-                <div class="p-6 border-b">
-                    <h2 id="recordingTitle" class="text-2xl font-bold text-gray-800 mb-2"></h2>
-                    <div id="recordingMeta" class="text-sm text-gray-600"></div>
+    <!-- Error Modal -->
+    <div id="errorModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+        <div class="modal-overlay fixed inset-0 bg-black bg-opacity-75" onclick="closeErrorModal()"></div>
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="relative bg-gray-800 rounded-xl shadow-2xl max-w-md w-full p-6 border border-red-900">
+                <div class="flex items-center gap-3 mb-4">
+                    <span class="text-3xl">⚠️</span>
+                    <h3 class="text-xl font-bold text-red-500">Error</h3>
                 </div>
-
-                <!-- Video + Transcript Layout -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-0">
-                    <!-- Video Player -->
-                    <div class="bg-black">
-                        <video id="videoPlayer" class="w-full" controls></video>
-                    </div>
-
-                    <!-- Interactive Transcript -->
-                    <div class="h-96 lg:h-auto overflow-y-auto p-6 bg-gray-50">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-lg font-bold text-gray-800">Interactive Transcript</h3>
-                            <button onclick="exportTranscript()" class="text-sm px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600">
-                                Export
-                            </button>
-                        </div>
-                        <div id="transcriptContainer">
-                            <!-- Transcript segments will be loaded here -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Summary Section -->
-                <div class="p-6 border-t">
-                    <h3 class="text-xl font-bold text-gray-800 mb-4">AI Summary</h3>
-                    <div id="summaryContainer" class="prose max-w-none">
-                        <!-- Summary will be loaded here -->
-                    </div>
-                </div>
-
-                <!-- Speaker Management -->
-                <div class="p-6 border-t bg-gray-50">
-                    <h3 class="text-xl font-bold text-gray-800 mb-4">Speaker Management</h3>
-                    <div id="speakersContainer" class="space-y-2">
-                        <!-- Speakers will be loaded here -->
-                    </div>
-                </div>
+                <p id="errorMessage" class="text-gray-300 mb-6"></p>
+                <button onclick="closeErrorModal()" 
+                        class="w-full px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white font-medium transition">
+                    Close
+                </button>
             </div>
         </div>
     </div>
@@ -125,6 +234,7 @@
     <script>
         let currentRecording = null;
         let currentRecordingId = null;
+        let renamingSpeaker = null;
 
         // Load recordings on page load
         document.addEventListener('DOMContentLoaded', () => {
@@ -141,7 +251,7 @@
                 }
             } catch (error) {
                 console.error('Error fetching recordings:', error);
-                alert('Could not connect to server. Is it running?');
+                showError('Could not connect to POAi server. Is it running?');
             }
         }
 
@@ -150,37 +260,52 @@
             
             if (recordings.length === 0) {
                 grid.innerHTML = `
-                    <div class="col-span-full text-center py-12">
-                        <p class="text-gray-500 text-lg">No recordings yet</p>
-                        <p class="text-gray-400 text-sm mt-2">Start recording from the Chrome extension!</p>
+                    <div class="col-span-full text-center py-16">
+                        <div class="text-6xl mb-4">🎥</div>
+                        <p class="text-xl text-gray-400 mb-2">No recordings yet</p>
+                        <p class="text-sm text-gray-500">Start recording from the Chrome extension!</p>
                     </div>
                 `;
                 return;
             }
 
-            grid.innerHTML = recordings.map(rec => `
-                <div class="bg-white rounded-lg shadow hover:shadow-lg transition overflow-hidden cursor-pointer"
-                     onclick="openRecording(${rec.id})">
-                    <div class="aspect-video bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-6xl">
-                        🎥
-                    </div>
-                    <div class="p-4">
-                        <h3 class="font-bold text-lg text-gray-800 mb-2 truncate">${rec.title}</h3>
-                        <div class="flex items-center justify-between text-sm text-gray-600 mb-2">
-                            <span>⏱️ ${formatDuration(rec.duration_seconds)}</span>
-                            <span>💾 ${rec.file_size_mb}MB</span>
+            grid.innerHTML = recordings.map(rec => {
+                const statusColors = {
+                    completed: 'bg-green-500',
+                    processing: 'bg-yellow-500',
+                    failed: 'bg-red-500'
+                };
+                const statusColor = statusColors[rec.status] || 'bg-gray-500';
+
+                return `
+                    <div class="bg-gray-800 rounded-xl overflow-hidden border border-gray-700 hover:border-gray-600 transition cursor-pointer transform hover:scale-[1.02]"
+                         onclick="openRecording('${rec._id}')">
+                        <div class="aspect-video bg-gradient-to-br from-blue-900 to-purple-900 flex items-center justify-center text-6xl">
+                            ${rec.status === 'completed' ? '🎬' : rec.status === 'processing' ? '⏳' : '❌'}
                         </div>
-                        <div class="flex items-center justify-between">
-                            <span class="status-badge status-${rec.status}">${rec.status}</span>
-                            <span class="text-xs text-gray-500">${formatDate(rec.created_at)}</span>
+                        <div class="p-4">
+                            <h3 class="font-bold text-lg text-white mb-2 truncate">${rec.title}</h3>
+                            <div class="flex items-center justify-between text-sm text-gray-400 mb-3">
+                                <span>⏱️ ${formatDuration(rec.metadata?.duration || 0)}</span>
+                                <span>💾 ${rec.metadata?.size_mb || 0}MB</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${statusColor} text-white">
+                                    <span class="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                                    ${rec.status}
+                                </span>
+                                <span class="text-xs text-gray-500">${formatDate(rec.created_at)}</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         async function openRecording(id) {
             try {
+                showLoadingState();
+                
                 const response = await fetch(`http://127.0.0.1:5000/recordings/${id}`);
                 const data = await response.json();
 
@@ -191,69 +316,79 @@
                 }
             } catch (error) {
                 console.error('Error loading recording:', error);
-                alert('Error loading recording');
+                showError('Failed to load recording');
             }
         }
 
-        function displayRecordingDetail(recording) {
-            // Switch views
+        function showLoadingState() {
             document.getElementById('galleryView').classList.add('hidden');
             document.getElementById('playerView').classList.remove('hidden');
+            
+            document.getElementById('recordingTitle').innerHTML = '<div class="skeleton h-8 w-64 rounded"></div>';
+            document.getElementById('videoPlayer').src = '';
+            document.getElementById('transcriptContainer').innerHTML = '<div class="skeleton h-32 rounded"></div>';
+        }
 
+        function displayRecordingDetail(recording) {
             // Set title and meta
             document.getElementById('recordingTitle').textContent = recording.title;
             document.getElementById('recordingMeta').innerHTML = `
-                <span class="mr-4">⏱️ ${formatDuration(recording.duration_seconds)}</span>
-                <span class="mr-4">🗣️ ${recording.speakers.length} speakers</span>
-                <span class="mr-4">🌐 ${recording.language}</span>
+                <span>⏱️ ${formatDuration(recording.metadata?.duration || 0)}</span>
+                <span>🗣️ ${recording.speakers?.length || 0} speakers</span>
+                <span>🌐 ${recording.metadata?.language || 'unknown'}</span>
                 <span>📅 ${formatDate(recording.created_at)}</span>
             `;
 
             // Load video
             const videoPlayer = document.getElementById('videoPlayer');
-            videoPlayer.src = `http://127.0.0.1:5000/video/${recording.id}`;
+            videoPlayer.src = `http://127.0.0.1:5000/video/${recording._id}`;
 
             // Load transcript
-            if (recording.transcript_json) {
-                const transcript = JSON.parse(recording.transcript_json);
-                displayTranscript(transcript);
+            if (recording.transcript && recording.transcript.length > 0) {
+                displayTranscript(recording.transcript);
+            } else {
+                document.getElementById('transcriptContainer').innerHTML = 
+                    '<p class="text-gray-500">Transcript not yet available</p>';
             }
 
             // Load summary
-            if (recording.summary_text) {
+            if (recording.summary) {
                 document.getElementById('summaryContainer').innerHTML = 
-                    '<pre class="whitespace-pre-wrap text-sm">' + recording.summary_text + '</pre>';
+                    '<pre class="whitespace-pre-wrap text-sm text-gray-300">' + recording.summary + '</pre>';
+            } else {
+                document.getElementById('summaryContainer').innerHTML = 
+                    '<p class="text-gray-500">Summary not yet available</p>';
             }
 
             // Load speakers
-            displaySpeakers(recording.speakers);
+            displaySpeakers(recording.speakers || []);
         }
 
-        function displayTranscript(transcript) {
+        function displayTranscript(segments) {
             const container = document.getElementById('transcriptContainer');
-            const segments = transcript.segments || [];
 
-            if (segments.length === 0) {
-                container.innerHTML = '<p class="text-gray-500">No transcript available</p>';
-                return;
-            }
+            container.innerHTML = segments.map((seg, idx) => {
+                const speakerNum = seg.speaker?.split(' ')[1] || 0;
+                const colors = ['bg-blue-900', 'bg-purple-900', 'bg-green-900', 'bg-red-900'];
+                const color = colors[speakerNum % colors.length];
 
-            container.innerHTML = segments.map((seg, idx) => `
-                <div class="transcript-segment p-3 mb-2 rounded border border-gray-200" 
-                     data-start="${seg.start}" 
-                     data-end="${seg.end}"
-                     onclick="seekToTime(${seg.start})">
-                    <div class="flex items-start gap-2">
-                        <span class="speaker-badge speaker-${seg.speaker.split(' ')[1] || 0}">
-                            ${seg.speaker}
-                        </span>
-                        <span class="text-xs text-gray-500">${formatTimestamp(seg.start)}</span>
+                return `
+                    <div class="transcript-segment p-4 mb-3 rounded-lg border border-gray-700 bg-gray-800" 
+                         data-start="${seg.start}" 
+                         data-end="${seg.end}"
+                         onclick="seekToTime(${seg.start})">
+                        <div class="flex items-center gap-3 mb-2">
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold ${color} text-white">
+                                ${seg.speaker}
+                            </span>
+                            <span class="text-xs text-gray-500">${formatTimestamp(seg.start)}</span>
+                        </div>
+                        <p class="text-gray-200">${seg.text}</p>
                     </div>
-                    <p class="mt-2 text-gray-800">${seg.text}</p>
-                </div>
-            `).join('');
+                `;
+            }).join('');
 
-            // Highlight active segment as video plays
+            // Auto-highlight active segment
             const videoPlayer = document.getElementById('videoPlayer');
             videoPlayer.addEventListener('timeupdate', () => {
                 const currentTime = videoPlayer.currentTime;
@@ -265,19 +400,12 @@
                     
                     if (currentTime >= start && currentTime <= end) {
                         seg.classList.add('active');
-                        // Auto-scroll to active segment
                         seg.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     } else {
                         seg.classList.remove('active');
                     }
                 });
             });
-        }
-
-        function seekToTime(time) {
-            const videoPlayer = document.getElementById('videoPlayer');
-            videoPlayer.currentTime = time;
-            videoPlayer.play();
         }
 
         function displaySpeakers(speakers) {
@@ -288,25 +416,78 @@
                 return;
             }
 
-            container.innerHTML = speakers.map(speaker => `
-                <div class="flex items-center gap-4 p-3 bg-white rounded border">
-                    <span class="speaker-badge speaker-${speaker.speaker_label.split(' ')[1] || 0}">
-                        ${speaker.speaker_label}
-                    </span>
-                    <input type="text" 
-                           value="${speaker.user_name || ''}" 
-                           placeholder="Enter name..."
-                           class="flex-1 px-3 py-1 border rounded"
-                           onblur="updateSpeakerName('${speaker.speaker_label}', this.value)">
-                    <span class="text-sm text-gray-600">
-                        ${speaker.segment_count} segments, ${formatDuration(speaker.total_duration)}
-                    </span>
-                </div>
-            `).join('');
+            container.innerHTML = speakers.map(speaker => {
+                const speakerNum = speaker.speaker_label?.split(' ')[1] || 0;
+                const colors = ['bg-blue-900', 'bg-purple-900', 'bg-green-900', 'bg-red-900'];
+                const color = colors[speakerNum % colors.length];
+
+                return `
+                    <div class="flex items-center gap-3 p-4 bg-gray-700 rounded-lg border border-gray-600">
+                        <span class="px-3 py-2 rounded-lg text-sm font-semibold ${color} text-white">
+                            ${speaker.speaker_label}
+                        </span>
+                        <button onclick="openRenameModal('${speaker.speaker_label}', '${speaker.display_name || ''}')"
+                                class="flex-1 text-left px-3 py-2 bg-gray-600 hover:bg-gray-500 rounded border border-gray-500 text-white transition">
+                            ${speaker.display_name || 'Click to rename'}
+                        </button>
+                        <span class="text-sm text-gray-400 whitespace-nowrap">
+                            ${speaker.segment_count} segments
+                        </span>
+                    </div>
+                `;
+            }).join('');
         }
 
-        async function updateSpeakerName(speakerLabel, userName) {
-            if (!userName.trim()) return;
+        function seekToTime(time) {
+            const videoPlayer = document.getElementById('videoPlayer');
+            videoPlayer.currentTime = time;
+            videoPlayer.play();
+        }
+
+        function switchTab(tab) {
+            // Update tab buttons
+            const transcriptTab = document.getElementById('transcriptTab');
+            const summaryTab = document.getElementById('summaryTab');
+            const transcriptContent = document.getElementById('transcriptContent');
+            const summaryContent = document.getElementById('summaryContent');
+
+            if (tab === 'transcript') {
+                transcriptTab.classList.add('border-blue-500', 'text-blue-500');
+                transcriptTab.classList.remove('border-transparent', 'text-gray-400');
+                summaryTab.classList.remove('border-blue-500', 'text-blue-500');
+                summaryTab.classList.add('border-transparent', 'text-gray-400');
+                transcriptContent.classList.remove('hidden');
+                summaryContent.classList.add('hidden');
+            } else {
+                summaryTab.classList.add('border-blue-500', 'text-blue-500');
+                summaryTab.classList.remove('border-transparent', 'text-gray-400');
+                transcriptTab.classList.remove('border-blue-500', 'text-blue-500');
+                transcriptTab.classList.add('border-transparent', 'text-gray-400');
+                summaryContent.classList.remove('hidden');
+                transcriptContent.classList.add('hidden');
+            }
+        }
+
+        function openRenameModal(label, currentName) {
+            renamingSpeaker = label;
+            document.getElementById('modalSpeakerLabel').value = label;
+            document.getElementById('modalDisplayName').value = currentName;
+            document.getElementById('renameModal').classList.remove('hidden');
+            document.getElementById('modalDisplayName').focus();
+        }
+
+        function closeRenameModal() {
+            document.getElementById('renameModal').classList.add('hidden');
+            renamingSpeaker = null;
+        }
+
+        async function saveRename() {
+            const displayName = document.getElementById('modalDisplayName').value.trim();
+            
+            if (!displayName) {
+                showError('Please enter a name');
+                return;
+            }
 
             try {
                 const response = await fetch('http://127.0.0.1:5000/speakers/update', {
@@ -314,34 +495,29 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         recording_id: currentRecordingId,
-                        speaker_label: speakerLabel,
-                        user_name: userName
+                        speaker_label: renamingSpeaker,
+                        display_name: displayName
                     })
                 });
 
                 const data = await response.json();
+                
                 if (data.success) {
-                    alert(`Updated: ${speakerLabel} → ${userName}`);
+                    closeRenameModal();
+                    // Refresh recording details
+                    openRecording(currentRecordingId);
+                } else {
+                    showError(data.error || 'Failed to update speaker');
                 }
             } catch (error) {
-                console.error('Error updating speaker:', error);
+                showError('Network error: ' + error.message);
             }
         }
 
-        function backToGallery() {
-            document.getElementById('playerView').classList.add('hidden');
-            document.getElementById('galleryView').classList.remove('hidden');
-            
-            // Stop video
-            document.getElementById('videoPlayer').pause();
-            document.getElementById('videoPlayer').src = '';
-        }
-
         function exportTranscript() {
-            if (!currentRecording || !currentRecording.transcript_json) return;
+            if (!currentRecording || !currentRecording.transcript) return;
 
-            const transcript = JSON.parse(currentRecording.transcript_json);
-            const text = transcript.segments.map(seg => 
+            const text = currentRecording.transcript.map(seg => 
                 `[${formatTimestamp(seg.start)}] ${seg.speaker}: ${seg.text}`
             ).join('\n\n');
 
@@ -353,17 +529,37 @@
             a.click();
         }
 
+        function showGallery() {
+            document.getElementById('playerView').classList.add('hidden');
+            document.getElementById('galleryView').classList.remove('hidden');
+            document.getElementById('videoPlayer').pause();
+            document.getElementById('videoPlayer').src = '';
+        }
+
+        function backToGallery() {
+            showGallery();
+        }
+
         async function showStats() {
             try {
                 const response = await fetch('http://127.0.0.1:5000/health');
                 const data = await response.json();
                 
                 if (data.database) {
-                    alert(`Database Stats:\n\nTotal: ${data.database.total_recordings}\nCompleted: ${data.database.completed}\nProcessing: ${data.database.processing}\nFailed: ${data.database.failed}`);
+                    alert(`POAi Statistics\n\nTotal: ${data.database.total_recordings}\nCompleted: ${data.database.completed}\nProcessing: ${data.database.processing}\nFailed: ${data.database.failed}`);
                 }
             } catch (error) {
-                console.error('Error fetching stats:', error);
+                showError('Could not fetch statistics');
             }
+        }
+
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('errorModal').classList.remove('hidden');
+        }
+
+        function closeErrorModal() {
+            document.getElementById('errorModal').classList.add('hidden');
         }
 
         // Utility functions
@@ -383,7 +579,7 @@
         function formatDate(dateStr) {
             if (!dateStr) return '';
             const date = new Date(dateStr);
-            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+            return date.toLocaleString();
         }
     </script>
 </body>

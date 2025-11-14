@@ -1,42 +1,66 @@
 #!/usr/bin/env python3
 """
-Local AI Recorder - Setup Script
-Helps verify and install all required dependencies
+POAi v2.0 - Production Setup & Launcher
+Verifies dependencies and launches the server
 """
 
 import sys
-import subprocess
 import os
+import subprocess
 import platform
+from pathlib import Path
 
-def print_header(text):
-    """Print a formatted header"""
-    print("\n" + "=" * 70)
-    print(f"  {text}")
-    print("=" * 70 + "\n")
+class Colors:
+    """ANSI color codes for terminal output"""
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    END = '\033[0m'
+    BOLD = '\033[1m'
+
+def print_banner():
+    """Print POAi startup banner"""
+    banner = f"""
+{Colors.CYAN}{'='*70}
+  _____   ____          _    _ 
+ |  __ \ / __ \   /\   (_)  | |
+ | |__) | |  | | /  \   _   | |
+ |  ___/| |  | |/ /\ \ | |  | |
+ | |    | |__| / ____ \| | _| |_
+ |_|     \____/_/    \_\_|(_)___/
+                                  
+ Productivity Optimization Assistant AI v2.0
+ Production Build with MongoDB & Video Support
+{'='*70}{Colors.END}
+"""
+    print(banner)
 
 def check_python_version():
-    """Check if Python version is compatible"""
-    print_header("Checking Python Version")
-    
+    """Check if Python version is 3.11+"""
+    print(f"\n{Colors.BOLD}[1/6] Checking Python Version...{Colors.END}")
     version = sys.version_info
-    print(f"Python Version: {version.major}.{version.minor}.{version.micro}")
     
-    if version.major < 3 or (version.major == 3 and version.minor < 8):
-        print("❌ ERROR: Python 3.8 or higher is required")
-        print("Please upgrade Python: https://www.python.org/downloads/")
+    print(f"  Python Version: {version.major}.{version.minor}.{version.micro}")
+    
+    if version.major < 3 or (version.major == 3 and version.minor < 11):
+        print(f"  {Colors.RED}✗ ERROR: Python 3.11+ required{Colors.END}")
+        print(f"  Current: {version.major}.{version.minor}.{version.micro}")
+        print(f"  Download: https://www.python.org/downloads/")
         return False
     
-    print("✅ Python version is compatible")
+    print(f"  {Colors.GREEN}✓ Python version OK{Colors.END}")
     return True
 
 def check_ffmpeg():
-    """Check if FFmpeg is installed"""
-    print_header("Checking FFmpeg")
+    """Check if FFmpeg is installed and in PATH"""
+    print(f"\n{Colors.BOLD}[2/6] Checking FFmpeg...{Colors.END}")
     
     try:
         result = subprocess.run(
-            ["ffmpeg", "-version"],
+            ['ffmpeg', '-version'],
             capture_output=True,
             text=True,
             timeout=5
@@ -44,223 +68,258 @@ def check_ffmpeg():
         
         if result.returncode == 0:
             version_line = result.stdout.split('\n')[0]
-            print(f"✅ FFmpeg found: {version_line}")
+            print(f"  {Colors.GREEN}✓ FFmpeg found: {version_line}{Colors.END}")
             return True
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
     
-    print("❌ FFmpeg not found")
-    print("\nFFmpeg is required for Whisper to process audio files.")
-    print("\nInstallation instructions:")
+    print(f"  {Colors.RED}✗ FFmpeg not found{Colors.END}")
+    print(f"\n  Installation:")
     
     system = platform.system()
     if system == "Windows":
-        print("  1. Download from: https://ffmpeg.org/download.html")
-        print("  2. Extract to C:\\ffmpeg")
-        print("  3. Add C:\\ffmpeg\\bin to your PATH")
-    elif system == "Darwin":  # macOS
-        print("  Run: brew install ffmpeg")
-    else:  # Linux
-        print("  Run: sudo apt-get install ffmpeg")
+        print(f"    1. Download: https://ffmpeg.org/download.html")
+        print(f"    2. Extract to C:\\ffmpeg")
+        print(f"    3. Add C:\\ffmpeg\\bin to PATH")
+        print(f"    Or: choco install ffmpeg")
+    elif system == "Darwin":
+        print(f"    Run: brew install ffmpeg")
+    else:
+        print(f"    Run: sudo apt-get install ffmpeg")
     
     return False
 
 def check_ollama():
     """Check if Ollama is installed and running"""
-    print_header("Checking Ollama")
+    print(f"\n{Colors.BOLD}[3/6] Checking Ollama...{Colors.END}")
     
     try:
         result = subprocess.run(
-            ["ollama", "list"],
+            ['ollama', 'list'],
             capture_output=True,
             text=True,
             timeout=10
         )
         
         if result.returncode == 0:
-            print("✅ Ollama is installed")
+            print(f"  {Colors.GREEN}✓ Ollama is running{Colors.END}")
             
+            # Check for models
             if result.stdout.strip():
-                print("\nInstalled models:")
-                for line in result.stdout.strip().split('\n')[1:]:  # Skip header
-                    print(f"  - {line.split()[0]}")
+                print(f"\n  Installed models:")
+                for line in result.stdout.strip().split('\n')[1:]:
+                    if line.strip():
+                        model_name = line.split()[0]
+                        print(f"    - {model_name}")
                 return True
             else:
-                print("\n⚠️  No models installed")
-                print("Install llama3: ollama pull llama3")
+                print(f"  {Colors.YELLOW}⚠ No models installed{Colors.END}")
+                print(f"  Run: ollama pull llama3")
                 return False
     except (FileNotFoundError, subprocess.TimeoutExpired):
         pass
     
-    print("❌ Ollama not found")
-    print("\nOllama is required for AI summarization.")
-    print("Download from: https://ollama.ai")
+    print(f"  {Colors.RED}✗ Ollama not found or not running{Colors.END}")
+    print(f"\n  Installation:")
+    print(f"    1. Download: https://ollama.ai")
+    print(f"    2. Install and start service")
+    print(f"    3. Run: ollama pull llama3")
+    
     return False
+
+def check_mongodb():
+    """Check if MongoDB is installed and running"""
+    print(f"\n{Colors.BOLD}[4/6] Checking MongoDB...{Colors.END}")
+    
+    try:
+        import pymongo
+        
+        # Try to connect to local MongoDB
+        client = pymongo.MongoClient(
+            'mongodb://localhost:27017/',
+            serverSelectionTimeoutMS=3000
+        )
+        
+        # Force connection attempt
+        client.server_info()
+        
+        print(f"  {Colors.GREEN}✓ MongoDB is running on localhost:27017{Colors.END}")
+        
+        # Check database
+        db = client['poai_db']
+        collections = db.list_collection_names()
+        
+        if collections:
+            print(f"  Database 'poai_db' found with collections:")
+            for coll in collections:
+                print(f"    - {coll}")
+        else:
+            print(f"  Database 'poai_db' will be created on first run")
+        
+        client.close()
+        return True
+        
+    except ImportError:
+        print(f"  {Colors.YELLOW}⚠ pymongo not installed{Colors.END}")
+        print(f"  Will be installed with requirements.txt")
+        return None  # Not critical, will be installed
+        
+    except Exception as e:
+        print(f"  {Colors.RED}✗ MongoDB not running or not accessible{Colors.END}")
+        print(f"\n  Installation:")
+        
+        system = platform.system()
+        if system == "Windows":
+            print(f"    1. Download: https://www.mongodb.com/try/download/community")
+            print(f"    2. Install MongoDB Community Server")
+            print(f"    3. Start MongoDB service:")
+            print(f"       net start MongoDB")
+        elif system == "Darwin":
+            print(f"    Run: brew install mongodb-community")
+            print(f"         brew services start mongodb-community")
+        else:
+            print(f"    Run: sudo apt-get install mongodb")
+            print(f"         sudo systemctl start mongod")
+        
+        print(f"\n  Or use Docker:")
+        print(f"    docker run -d -p 27017:27017 --name mongodb mongo:latest")
+        
+        return False
 
 def install_requirements():
     """Install Python requirements"""
-    print_header("Installing Python Dependencies")
+    print(f"\n{Colors.BOLD}[5/6] Python Dependencies...{Colors.END}")
     
-    if not os.path.exists("requirements.txt"):
-        print("❌ requirements.txt not found!")
+    if not os.path.exists('requirements.txt'):
+        print(f"  {Colors.RED}✗ requirements.txt not found{Colors.END}")
         return False
     
-    print("Installing packages (this may take several minutes)...")
+    response = input(f"  Install/update dependencies? (y/n): ").lower()
     
-    try:
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
-            capture_output=True,
-            text=True
-        )
+    if response == 'y':
+        print(f"\n  Installing packages (this may take a few minutes)...")
         
-        if result.returncode == 0:
-            print("✅ All Python packages installed successfully")
-            return True
-        else:
-            print("❌ Installation failed:")
-            print(result.stderr)
+        try:
+            # Install PyTorch first for Windows CUDA support
+            if platform.system() == "Windows":
+                print(f"  Installing PyTorch with CUDA support...")
+                subprocess.run(
+                    [sys.executable, '-m', 'pip', 'install', 'torch', 'torchaudio',
+                     '--index-url', 'https://download.pytorch.org/whl/cu118'],
+                    check=True
+                )
+            
+            # Install other requirements
+            result = subprocess.run(
+                [sys.executable, '-m', 'pip', 'install', '-r', 'requirements.txt'],
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode == 0:
+                print(f"  {Colors.GREEN}✓ All packages installed{Colors.END}")
+                return True
+            else:
+                print(f"  {Colors.RED}✗ Installation failed{Colors.END}")
+                print(result.stderr)
+                return False
+                
+        except Exception as e:
+            print(f"  {Colors.RED}✗ Installation error: {e}{Colors.END}")
             return False
-    except Exception as e:
-        print(f"❌ Installation error: {e}")
-        return False
+    else:
+        print(f"  {Colors.YELLOW}⚠ Skipped{Colors.END}")
+        return None
 
 def create_directories():
     """Create necessary directories"""
-    print_header("Creating Directories")
+    print(f"\n{Colors.BOLD}[6/6] Creating Directories...{Colors.END}")
     
-    directories = ["videos", "transcribe", "summary", "logs"]
+    directories = ['videos', 'audio', 'compressed', 'logs', 'templates', 'static']
     
     for directory in directories:
-        os.makedirs(directory, exist_ok=True)
-        print(f"✅ Created: {directory}/")
+        Path(directory).mkdir(exist_ok=True)
+        print(f"  {Colors.GREEN}✓{Colors.END} {directory}/")
     
     return True
 
-def verify_config():
-    """Verify config.yaml exists"""
-    print_header("Checking Configuration")
+def launch_server():
+    """Launch the POAi server"""
+    print(f"\n{Colors.BOLD}{'='*70}{Colors.END}")
+    print(f"{Colors.BOLD}Setup Complete!{Colors.END}")
+    print(f"{Colors.BOLD}{'='*70}{Colors.END}\n")
     
-    if os.path.exists("config.yaml"):
-        print("✅ config.yaml found")
-        return True
-    else:
-        print("❌ config.yaml not found")
-        print("Creating default config.yaml...")
-        
-        default_config = """# Local AI Recorder Configuration
-transcription:
-  model: "small"
-  language: "auto"
-
-diarization:
-  enabled: true
-  min_speakers: 1
-  max_speakers: 10
-  pause_threshold: 2.0
-
-ollama:
-  model: "llama3"
-  temperature: 0.3
-  style: "detailed"
-
-server:
-  host: "127.0.0.1"
-  port: 5000
-  max_file_size_mb: 500
-  enable_cors: true
-
-output:
-  include_timestamps: true
-  include_speakers: true
-  save_metadata: true
-  auto_open_summary: false
-
-performance:
-  whisper_threads: 0
-  use_gpu: false
-  batch_size: 16
-
-logging:
-  level: "INFO"
-  retention_days: 30
-  max_log_size_mb: 10
-"""
-        
-        with open("config.yaml", "w") as f:
-            f.write(default_config)
-        
-        print("✅ Created default config.yaml")
-        return True
-
-def run_setup():
-    """Run the complete setup process"""
-    print("\n" + "=" * 70)
-    print("  LOCAL AI RECORDER - SETUP WIZARD")
-    print("  Version 2.1.0")
-    print("=" * 70)
-    
-    results = []
-    
-    # Step 1: Check Python
-    results.append(("Python Version", check_python_version()))
-    
-    # Step 2: Check FFmpeg
-    results.append(("FFmpeg", check_ffmpeg()))
-    
-    # Step 3: Check Ollama
-    results.append(("Ollama", check_ollama()))
-    
-    # Step 4: Create directories
-    results.append(("Directories", create_directories()))
-    
-    # Step 5: Verify config
-    results.append(("Configuration", verify_config()))
-    
-    # Step 6: Install Python packages
-    print("\nDo you want to install Python dependencies now? (y/n): ", end="")
-    response = input().strip().lower()
+    response = input(f"Start POAi server now? (y/n): ").lower()
     
     if response == 'y':
-        results.append(("Python Packages", install_requirements()))
+        print(f"\n{Colors.CYAN}Starting POAi server...{Colors.END}")
+        print(f"Dashboard: {Colors.BOLD}http://127.0.0.1:5000{Colors.END}")
+        print(f"Press Ctrl+C to stop\n")
+        print(f"{Colors.BOLD}{'='*70}{Colors.END}\n")
+        
+        try:
+            if platform.system() == "Windows":
+                # Launch in new window on Windows
+                subprocess.Popen(
+                    [sys.executable, 'server.py'],
+                    creationflags=subprocess.CREATE_NEW_CONSOLE
+                )
+                print(f"{Colors.GREEN}✓ Server launched in new window{Colors.END}")
+            else:
+                # Launch in same terminal on Unix
+                subprocess.run([sys.executable, 'server.py'])
+        
+        except KeyboardInterrupt:
+            print(f"\n{Colors.YELLOW}Server stopped by user{Colors.END}")
+        except Exception as e:
+            print(f"{Colors.RED}Error launching server: {e}{Colors.END}")
     else:
-        print("⚠️  Skipped Python package installation")
-        print("Run manually: pip install -r requirements.txt")
-        results.append(("Python Packages", None))
-    
-    # Print summary
-    print_header("SETUP SUMMARY")
-    
-    for component, status in results:
-        if status is True:
-            print(f"✅ {component}: Ready")
-        elif status is False:
-            print(f"❌ {component}: Issues found")
-        else:
-            print(f"⚠️  {component}: Skipped")
-    
-    all_ready = all(s is True for s in [r[1] for r in results if r[1] is not None])
-    
-    print("\n" + "=" * 70)
-    
-    if all_ready:
-        print("🎉 Setup Complete! You're ready to start recording.")
-        print("\nNext steps:")
-        print("  1. Start the server: python server.py")
-        print("  2. Load the Chrome extension")
-        print("  3. Start recording meetings!")
-    else:
-        print("⚠️  Setup incomplete. Please resolve the issues above.")
-        print("\nFor help, visit the documentation or check the README.md")
-    
-    print("=" * 70 + "\n")
+        print(f"\n{Colors.CYAN}To start manually, run:{Colors.END}")
+        print(f"  python server.py")
 
-if __name__ == "__main__":
+def main():
+    """Main setup routine"""
+    print_banner()
+    
+    results = {}
+    
+    # Run all checks
+    results['python'] = check_python_version()
+    results['ffmpeg'] = check_ffmpeg()
+    results['ollama'] = check_ollama()
+    results['mongodb'] = check_mongodb()
+    results['packages'] = install_requirements()
+    results['directories'] = create_directories()
+    
+    # Summary
+    print(f"\n{Colors.BOLD}{'='*70}{Colors.END}")
+    print(f"{Colors.BOLD}SETUP SUMMARY{Colors.END}")
+    print(f"{Colors.BOLD}{'='*70}{Colors.END}\n")
+    
+    for component, status in results.items():
+        icon = "✓" if status else ("⚠" if status is None else "✗")
+        color = Colors.GREEN if status else (Colors.YELLOW if status is None else Colors.RED)
+        status_text = "OK" if status else ("Skipped" if status is None else "Issues")
+        
+        print(f"  {color}{icon}{Colors.END} {component.capitalize()}: {status_text}")
+    
+    # Check if critical components are ready
+    critical = ['python', 'ffmpeg', 'mongodb']
+    all_critical_ready = all(results.get(k) for k in critical if results.get(k) is not None)
+    
+    if all_critical_ready and results['ollama']:
+        launch_server()
+    else:
+        print(f"\n{Colors.YELLOW}⚠ Please resolve issues above before starting POAi{Colors.END}")
+        print(f"\n{Colors.CYAN}Once resolved, run:{Colors.END}")
+        print(f"  python setup.py")
+
+if __name__ == '__main__':
     try:
-        run_setup()
+        main()
     except KeyboardInterrupt:
-        print("\n\nSetup cancelled by user.")
+        print(f"\n\n{Colors.YELLOW}Setup cancelled by user{Colors.END}")
         sys.exit(1)
     except Exception as e:
-        print(f"\n\n❌ Setup failed with error: {e}")
+        print(f"\n\n{Colors.RED}Setup failed: {e}{Colors.END}")
         sys.exit(1)

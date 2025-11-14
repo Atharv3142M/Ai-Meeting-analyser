@@ -1,5 +1,5 @@
-# Local AI Video Recorder - Production Requirements
-# Python 3.11 Compatible
+# POAi v2.0 - Production Requirements
+# Python 3.11+ Compatible
 # Install torch first: pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118
 
 # Web Framework
@@ -7,15 +7,14 @@ Flask==3.0.0
 flask-cors==4.0.0
 Werkzeug==3.0.1
 
-# Database
-SQLAlchemy==2.0.23
-alembic==1.13.1
+# Database - MongoDB
+pymongo==4.6.1
 
 # AI & Machine Learning (Unpinned for compatibility)
 openai-whisper
 # torch and torchaudio installed separately via CUDA index
 
-# LangChain (Unpinned to avoid conflicts)
+# LangChain (Unpinned)
 langchain
 langchain-ollama
 langchain-community
@@ -31,13 +30,16 @@ pydub==0.25.1
 PyYAML==6.0.1
 python-dotenv==1.0.0
 
-# Utilities (Unpinned for compatibility)
+# Utilities (Unpinned)
 numpy
 requests==2.31.0
 tqdm==4.66.1
 
 # Logging
 colorlog==6.8.0
+
+# Date/Time
+python-dateutil==2.8.2
 
 # File Handling
 python-magic-bin==0.4.14; platform_system == "Windows"
