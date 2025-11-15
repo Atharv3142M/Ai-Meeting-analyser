@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Local AI Video Recorder",
+  "name": "POAi v2.0 - Productivity Optimization Assistant AI",
   "version": "2.0.0",
-  "description": "Records meeting video and audio with speaker identification. 100% local processing.",
+  "description": "Record meetings with AI-powered analysis. 100% local and private.",
   "permissions": [
-    "storage",
-    "activeTab",
+    "tabCapture",
+    "offscreen",
     "notifications",
     "tabs",
-    "tabCapture",
-    "offscreen"
+    "storage",
+    "activeTab"
   ],
   "host_permissions": [
     "http://127.0.0.1:5000/*",
@@ -25,7 +25,8 @@
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
-    }
+    },
+    "default_title": "POAi v2.0 - Record Meeting"
   },
   "icons": {
     "16": "icons/icon16.png",

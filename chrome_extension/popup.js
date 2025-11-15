@@ -1,148 +1,207 @@
-// Popup UI Logic - This is a "dumb" remote control for background.js
+/**
+ * POAi v2.0 - Popup UI Logic
+ * Handles user interactions and communicates with background script
+ */
 
 // DOM Elements
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
+const dashboardBtn = document.getElementById('dashboardBtn');
 const recordingName = document.getElementById('recordingName');
 const recordingStatus = document.getElementById('recordingStatus');
 const recordingTime = document.getElementById('recordingTime');
-const statusContainer = document.getElementById('statusContainer');
-const statusMessage = document.getElementById('statusMessage');
 
 let recordingInterval;
 let seconds = 0;
 
-// Start recording button click
+// ==================== Event Listeners ====================
+
+// Start Recording Button
 startBtn.addEventListener('click', async () => {
   const name = recordingName.value.trim();
   
   if (!name) {
-    showAlert('Please enter a name for the recording.');
+    showNotification('Please enter a name for the recording', 'warning');
+    recordingName.focus();
     return;
   }
 
-  // Disable button and show status
+  console.log('[Popup] Starting recording:', name);
+  
+  // Disable button
   startBtn.disabled = true;
-  statusMessage.textContent = 'Waiting for permission...';
-  statusContainer.style.display = 'block';
+  startBtn.textContent = 'Starting...';
 
-  // Send message to background to start
   try {
+    // Send message to background script
     const response = await chrome.runtime.sendMessage({ 
       action: 'startRecording', 
       recordingName: name 
     });
     
     if (response && response.success) {
-      // The background script is now in charge.
-      // We just update the UI.
+      console.log('[Popup] Recording started successfully');
       updateUIToRecording(name, response.startTime);
-      // Close the popup window automatically after a short delay
-      setTimeout(() => window.close(), 500);
-    } else if (response && response.error) {
-      showAlert('Error starting recording: ' + response.error);
-      updateUIToStopped();
+      
+      // Close popup after short delay
+      setTimeout(() => window.close(), 800);
+    } else {
+      console.error('[Popup] Failed to start recording:', response?.error);
+      showNotification(response?.error || 'Failed to start recording', 'error');
+      resetStartButton();
     }
   } catch (error) {
-    showAlert('Error: ' + error.message);
-    updateUIToStopped();
+    console.error('[Popup] Error starting recording:', error);
+    showNotification('Error: ' + error.message, 'error');
+    resetStartButton();
   }
 });
 
-// Stop recording button click
+// Stop Recording Button
 stopBtn.addEventListener('click', async () => {
+  console.log('[Popup] Stop button clicked');
+  
   stopBtn.disabled = true;
-  stopBtn.textContent = 'Processing...';
+  stopBtn.textContent = 'Stopping...';
   
   try {
-    // Send message to background to stop
     const response = await chrome.runtime.sendMessage({ action: 'stopRecording' });
     
-    stopBtn.disabled = false;
-    stopBtn.innerHTML = '<span class="icon">⏹️</span> Finish Recording';
-    
     if (response && response.success) {
+      console.log('[Popup] Recording stopped successfully');
+      showNotification('Recording stopped. Processing...', 'success');
       updateUIToStopped();
-      showAlert('Recording finished!\nSending to local server for processing...\nYou will get a notification when it is complete.');
-    } else if (response && response.error) {
-      showAlert('Error stopping recording: ' + response.error);
+    } else {
+      console.error('[Popup] Failed to stop recording:', response?.error);
+      showNotification(response?.error || 'Failed to stop recording', 'error');
+      stopBtn.disabled = false;
+      stopBtn.innerHTML = '<span class="icon">⏹️</span> Finish Recording';
     }
   } catch (error) {
+    console.error('[Popup] Error stopping recording:', error);
+    showNotification('Error: ' + error.message, 'error');
     stopBtn.disabled = false;
     stopBtn.innerHTML = '<span class="icon">⏹️</span> Finish Recording';
-    showAlert('Error: ' + error.message);
   }
 });
 
-// --- UI Update Functions ---
+// Open Dashboard Button
+dashboardBtn.addEventListener('click', () => {
+  console.log('[Popup] Opening dashboard');
+  chrome.tabs.create({ url: 'http://127.0.0.1:5000' });
+});
+
+// ==================== UI Update Functions ====================
+
 function updateUIToRecording(name, startTime) {
+  console.log('[Popup] Updating UI to recording state');
+  
+  // Update input
   recordingName.value = name;
+  recordingName.disabled = true;
+  
+  // Update buttons
   startBtn.style.display = 'none';
   stopBtn.style.display = 'flex';
+  stopBtn.disabled = false;
+  
+  // Show status
   recordingStatus.classList.add('active');
-  recordingName.disabled = true;
-  statusContainer.style.display = 'none';
   
   // Calculate elapsed time
   seconds = Math.floor((Date.now() - startTime) / 1000);
+  updateTimer();
   
-  // Clear any old interval
-  if (recordingInterval) clearInterval(recordingInterval);
+  // Clear any existing interval
+  if (recordingInterval) {
+    clearInterval(recordingInterval);
+  }
   
-  // Start new interval to update timer
+  // Start timer
   recordingInterval = setInterval(() => {
     seconds++;
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    recordingTime.textContent = 
-      `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    updateTimer();
   }, 1000);
+}
+
+function updateUIToStopped() {
+  console.log('[Popup] Updating UI to stopped state');
   
-  // Update display immediately
+  // Clear timer
+  if (recordingInterval) {
+    clearInterval(recordingInterval);
+    recordingInterval = null;
+  }
+  
+  // Reset input
+  recordingName.disabled = false;
+  recordingName.value = '';
+  recordingName.focus();
+  
+  // Reset buttons
+  startBtn.style.display = 'flex';
+  startBtn.disabled = false;
+  startBtn.innerHTML = '<span class="icon">▶️</span> Start Recording';
+  
+  stopBtn.style.display = 'none';
+  stopBtn.innerHTML = '<span class="icon">⏹️</span> Finish Recording';
+  
+  // Hide status
+  recordingStatus.classList.remove('active');
+  recordingTime.textContent = '00:00';
+  
+  // Reset timer
+  seconds = 0;
+}
+
+function resetStartButton() {
+  startBtn.disabled = false;
+  startBtn.innerHTML = '<span class="icon">▶️</span> Start Recording';
+}
+
+function updateTimer() {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   recordingTime.textContent = 
     `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
-function updateUIToStopped() {
-  if (recordingInterval) clearInterval(recordingInterval);
-  startBtn.style.display = 'flex';
-  startBtn.disabled = false;
-  stopBtn.style.display = 'none';
-  recordingStatus.classList.remove('active');
-  recordingName.disabled = false;
-  recordingName.value = ''; // Clear name for next time
-  recordingTime.textContent = '00:00';
-  statusContainer.style.display = 'none';
-  statusMessage.textContent = 'Waiting...';
-  seconds = 0;
-}
-
-function showAlert(message) {
+function showNotification(message, type = 'info') {
+  // Simple alert for now - could be enhanced with custom notification UI
+  console.log(`[Popup] ${type.toUpperCase()}: ${message}`);
   alert(message);
 }
 
-// --- Restore State ---
-// When the popup opens, it ASKS the background script what the state is.
+// ==================== State Restoration ====================
+
 async function restoreRecordingState() {
+  console.log('[Popup] Restoring recording state...');
+  
   try {
     const response = await chrome.runtime.sendMessage({ action: 'getRecordingStatus' });
     
     if (response && response.isRecording) {
-      // If background says "we are recording", update the UI to match
+      console.log('[Popup] Recording in progress, updating UI');
       const { name, startTime } = response.recordingData || {};
       updateUIToRecording(name, startTime);
     } else {
-      // If background says "we are not recording", show the start button
+      console.log('[Popup] No active recording');
       updateUIToStopped();
     }
   } catch (error) {
-    // This can happen if the background script is not ready (e.g., on extension install)
-    console.warn('Could not restore recording state:', error.message);
+    console.warn('[Popup] Could not restore state:', error);
     updateUIToStopped();
   }
 }
 
-// Initial check when popup opens
-document.addEventListener('DOMContentLoaded', restoreRecordingState);
+// ==================== Initialization ====================
+
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('[Popup] POAi v2.0 popup loaded');
+  restoreRecordingState();
+  
+  // Focus on input field
+  if (!recordingName.disabled) {
+    recordingName.focus();
+  }
+});
