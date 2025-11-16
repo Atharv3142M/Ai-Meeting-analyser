@@ -12,15 +12,14 @@
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             width: 400px;
-            min-height: 380px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
         
         .container {
             background: white;
-            min-height: 380px;
+            min-height: 420px;
             display: flex;
             flex-direction: column;
         }
@@ -43,20 +42,17 @@
             margin: 0 auto 12px;
             font-size: 24px;
             font-weight: bold;
-            backdrop-filter: blur(10px);
         }
         
         .header h1 {
             font-size: 20px;
             font-weight: 700;
             margin-bottom: 4px;
-            letter-spacing: -0.5px;
         }
         
         .header p {
             font-size: 12px;
             opacity: 0.9;
-            font-weight: 500;
         }
         
         .content {
@@ -83,7 +79,6 @@
             border-radius: 8px;
             font-size: 14px;
             transition: all 0.2s;
-            font-family: inherit;
         }
         
         input[type="text"]:focus {
@@ -95,14 +90,12 @@
         input[type="text"]:disabled {
             background: #f7fafc;
             color: #a0aec0;
-            cursor: not-allowed;
         }
         
         .help-text {
             font-size: 12px;
             color: #718096;
             margin-top: 6px;
-            font-style: italic;
         }
         
         .btn {
@@ -118,7 +111,6 @@
             justify-content: center;
             gap: 8px;
             transition: all 0.2s;
-            font-family: inherit;
             margin-bottom: 12px;
         }
         
@@ -130,10 +122,6 @@
         .btn:not(:disabled):hover {
             transform: translateY(-1px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
-        
-        .btn:not(:disabled):active {
-            transform: translateY(0);
         }
         
         .btn-primary {
@@ -202,10 +190,13 @@
             font-size: 18px;
             font-weight: 700;
             color: #e74c3c;
+            margin-top: 4px;
         }
         
-        .icon {
-            font-size: 18px;
+        .warning {
+            font-size: 11px;
+            color: #d63031;
+            margin-top: 8px;
         }
         
         .divider {
@@ -244,34 +235,28 @@
             </div>
 
             <div class="recording-status" id="recordingStatus">
-                <div style="margin-bottom: 8px;">
+                <div>
                     <span class="recording-dot"></span>
                     <span class="status-text">RECORDING IN PROGRESS</span>
                 </div>
                 <div class="timer" id="recordingTime">00:00</div>
-                <div style="margin-top: 8px; font-size: 11px; color: #d63031;">
-                    ⚠️ Wait at least 10 seconds before stopping
-                </div>
+                <div class="warning">⚠️ Wait at least 10 seconds before stopping</div>
             </div>
 
             <button class="btn btn-primary" id="startBtn">
-                <span class="icon">▶️</span>
+                <span>▶️</span>
                 Start Recording
             </button>
 
             <button class="btn btn-danger" id="stopBtn" style="display: none;">
-                <span class="icon">⏹️</span>
+                <span>⏹️</span>
                 Finish Recording
             </button>
-            
-            <div style="display: none; background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 12px; margin-bottom: 12px; font-size: 12px;" id="stopWarning">
-                <strong>⚠️ Important:</strong> Wait 3 seconds after clicking stop for file to finalize.
-            </div>
 
-            <div class="divider"></div>
+            <div class="divider" id="divider"></div>
 
             <button class="btn btn-secondary" id="dashboardBtn">
-                <span class="icon">📊</span>
+                <span>📊</span>
                 Open Dashboard
             </button>
         </div>

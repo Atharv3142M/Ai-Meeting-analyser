@@ -1,6 +1,10 @@
 /**
- * POAi v2.0 - Background Service Worker
- * Manages recording state and coordinates between popup and offscreen document
+ * POAi v2.0 - Background Service Worker (FIXED STATE MANAGEMENT)
+ * 
+ * KEY FIXES:
+ * 1. State is ALWAYS reset after stop, even on error
+ * 2. Errors from offscreen are properly handled
+ * 3. Timeout mechanism ensures state never gets stuck
  */
 
 // Recording state (source of truth)
@@ -11,39 +15,44 @@ let recordingState = {
   tabId: null
 };
 
+// Timeout to force state reset if something goes wrong
+let recordingTimeout = null;
+const MAX_RECORDING_TIME = 2 * 60 * 60 * 1000; // 2 hours max
+
 console.log('[Background] POAi v2.0 service worker initialized');
 
 // ==================== Message Listener ====================
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('[Background] Received message:', request.action);
+  console.log('[Background] Message received:', request.action);
   
   if (request.action === 'startRecording') {
     handleStartRecording(request.recordingName)
       .then((startTime) => {
-        console.log('[Background] Start recording successful');
         sendResponse({ success: true, startTime });
       })
       .catch(error => {
-        console.error('[Background] Start recording failed:', error);
+        console.error('[Background] Start failed:', error);
+        // CRITICAL: Reset state on start failure
+        forceResetState();
         sendResponse({ success: false, error: error.message });
       });
-    return true; // Keep message channel open for async response
+    return true;
 
   } else if (request.action === 'stopRecording') {
     handleStopRecording()
       .then((result) => {
-        console.log('[Background] Stop recording successful');
         sendResponse(result);
       })
       .catch(error => {
-        console.error('[Background] Stop recording failed:', error);
+        console.error('[Background] Stop failed:', error);
+        // CRITICAL: Reset state on stop failure
+        forceResetState();
         sendResponse({ success: false, error: error.message });
       });
     return true;
 
   } else if (request.action === 'getRecordingStatus') {
-    console.log('[Background] Status request - isRecording:', recordingState.isRecording);
     sendResponse({ 
       isRecording: recordingState.isRecording, 
       recordingData: recordingState.isRecording ? recordingState : null 
@@ -55,6 +64,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     handleBlobReady(request.blobData, request.mimeType, request.size);
     sendResponse({ success: true });
     return true;
+    
+  } else if (request.action === 'recordingError') {
+    console.error('[Background] Recording error from offscreen:', request.error);
+    // CRITICAL: Handle offscreen errors
+    handleOffscreenError(request.error);
+    sendResponse({ success: true });
+    return true;
   }
 });
 
@@ -62,41 +78,33 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   if (recordingState.isRecording && recordingState.tabId === tabId) {
-    console.warn('[Background] Recorded tab closed, stopping recording');
-    handleStopRecording().catch(err => 
-      console.error('[Background] Error stopping after tab close:', err)
-    );
+    console.warn('[Background] Tab closed during recording');
+    forceResetState();
+    showNotification('Recording stopped', 'Tab was closed during recording');
   }
 });
 
 // ==================== Core Functions ====================
 
 async function handleStartRecording(recordingName) {
-  console.log('[Background] handleStartRecording called:', recordingName);
+  console.log('[Background] handleStartRecording:', recordingName);
   
-  // Get active tab
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab || !tab.id) {
-    throw new Error('No active tab found');
-  }
-  
-  console.log('[Background] Active tab:', tab.id, tab.url);
-  
-  // Check if already recording
   if (recordingState.isRecording) {
     throw new Error('Recording already in progress');
   }
 
-  // Check for restricted URLs
-  if (tab.url?.startsWith('chrome://') || 
-      tab.url?.startsWith('chrome-extension://') ||
-      tab.url?.startsWith('edge://') ||
-      tab.url?.startsWith('about:')) {
-    throw new Error('Cannot record browser internal pages. Please navigate to a website.');
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || !tab.id) {
+    throw new Error('No active tab found');
   }
 
-  // Set recording state
+  if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://')) {
+    throw new Error('Cannot record browser internal pages');
+  }
+
   const startTime = Date.now();
+  
+  // Set state BEFORE starting capture
   recordingState = {
     isRecording: true,
     name: recordingName,
@@ -104,61 +112,49 @@ async function handleStartRecording(recordingName) {
     tabId: tab.id
   };
   
-  console.log('[Background] Recording state set');
+  // Set timeout to force reset after max recording time
+  recordingTimeout = setTimeout(() => {
+    console.warn('[Background] Recording timeout reached, forcing reset');
+    forceResetState();
+    showNotification('Recording stopped', 'Maximum recording time reached (2 hours)');
+  }, MAX_RECORDING_TIME);
 
-  // Get stream ID from tabCapture
-  console.log('[Background] Requesting tabCapture stream...');
-  let streamId;
   try {
-    streamId = await chrome.tabCapture.getMediaStreamId({
+    // Get stream ID
+    const streamId = await chrome.tabCapture.getMediaStreamId({
       targetTabId: tab.id
     });
     console.log('[Background] Got streamId:', streamId);
-  } catch (err) {
-    console.error('[Background] tabCapture failed:', err);
-    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
-    throw new Error('Permission denied. Please select a tab to share audio and video.');
-  }
 
-  // Setup offscreen document
-  console.log('[Background] Setting up offscreen document...');
-  try {
+    // Setup offscreen document
     await setupOffscreenDocument();
-  } catch (err) {
-    console.error('[Background] Offscreen setup failed:', err);
-    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
-    throw new Error('Failed to initialize recording environment');
-  }
 
-  // Start offscreen recording
-  console.log('[Background] Starting offscreen recording...');
-  try {
+    // Start recording
     await chrome.runtime.sendMessage({
       action: 'startOffscreenRecording',
       streamId: streamId,
       tabId: tab.id
     });
-  } catch (err) {
-    console.error('[Background] Failed to start offscreen recording:', err);
-    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
-    throw new Error('Failed to start recording: ' + err.message);
-  }
 
-  // Update badge
-  updateBadge(true);
-  
-  // Start keep-alive
-  startKeepAlive();
-  
-  console.log('[Background] Recording started successfully');
-  return startTime;
+    updateBadge(true);
+    startKeepAlive();
+    
+    console.log('[Background] Recording started successfully');
+    return startTime;
+    
+  } catch (err) {
+    console.error('[Background] Start recording failed:', err);
+    // CRITICAL: Reset state on failure
+    forceResetState();
+    throw err;
+  }
 }
 
 async function handleStopRecording() {
   console.log('[Background] handleStopRecording called');
   
   if (!recordingState.isRecording) {
-    console.warn('[Background] Not currently recording');
+    console.warn('[Background] Not recording');
     return { success: false, error: 'No active recording' };
   }
 
@@ -166,140 +162,110 @@ async function handleStopRecording() {
   
   try {
     await chrome.runtime.sendMessage({ action: 'stopOffscreenRecording' });
-    console.log('[Background] Stop signal sent successfully');
+    console.log('[Background] Stop signal sent');
+    
+    // Don't reset state here - wait for blobReady or error
+    // But set a timeout in case offscreen never responds
+    setTimeout(() => {
+      if (recordingState.isRecording) {
+        console.error('[Background] Offscreen timeout, forcing reset');
+        forceResetState();
+        showNotification('Error', 'Recording stopped but file may not have been saved');
+      }
+    }, 30000); // 30 second timeout
+    
+    return { success: true, message: 'Stop signal sent' };
+    
   } catch (sendError) {
-    console.error('[Background] Error sending stop signal:', sendError);
-    // Continue anyway - offscreen might be handling it
+    console.error('[Background] Error sending stop:', sendError);
+    // CRITICAL: Reset state if we can't even send stop signal
+    forceResetState();
+    throw sendError;
   }
-
-  // Note: We don't reset state here - wait for blobReady
-  return { success: true, message: 'Stop signal sent' };
 }
 
 async function handleBlobReady(blobData, mimeType, size) {
-  console.log('[Background] handleBlobReady called');
-  console.log('[Background] Blob size:', size, 'bytes');
-  console.log('[Background] Blob type:', mimeType);
+  console.log('[Background] handleBlobReady - size:', size, 'bytes');
   
   try {
-    // Validate blob data
-    if (!blobData) {
-      throw new Error('No blob data received');
+    // Validate
+    if (!blobData || size === 0) {
+      throw new Error('Invalid blob data');
     }
     
-    if (size === 0 || size < 1000) {
-      throw new Error('Blob is empty or too small (likely corrupted)');
+    if (size < 10000) {
+      throw new Error(`Blob too small (${size} bytes)`);
     }
     
-    // Convert base64 to Blob
-    console.log('[Background] Converting base64 to Blob...');
+    // Convert
     const response = await fetch(blobData);
     const videoBlob = await response.blob();
     
-    console.log('[Background] Blob converted, actual size:', videoBlob.size);
+    console.log('[Background] Blob converted:', videoBlob.size, 'bytes');
     
-    // Save recording name
+    // Save recording name before reset
     const recordingName = recordingState.name;
     
-    // Reset state
-    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
-    updateBadge(false);
-    stopKeepAlive();
+    // CRITICAL: Reset state BEFORE upload (so popup shows correct state)
+    forceResetState();
     
-    // Close offscreen document
-    console.log('[Background] Closing offscreen document...');
+    // Close offscreen
     try {
       await chrome.offscreen.closeDocument();
-      console.log('[Background] Offscreen document closed');
     } catch (e) {
-      console.warn('[Background] Offscreen already closed:', e.message);
+      console.warn('[Background] Offscreen close error:', e.message);
     }
     
-    // Upload to server
+    // Upload
     await uploadToServer(videoBlob, recordingName, mimeType);
     
   } catch (error) {
-    console.error('[Background] Error handling blob:', error);
-    
-    // Reset state on error
-    recordingState = { isRecording: false, name: '', startTime: null, tabId: null };
-    updateBadge(false);
-    stopKeepAlive();
-    
-    // Notify user
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
-      title: 'POAi - Recording Error',
-      message: 'Failed to process recording: ' + error.message
-    });
+    console.error('[Background] Blob handling error:', error);
+    // State already reset above
+    showNotification('Error', 'Failed to process recording: ' + error.message);
   }
 }
 
+function handleOffscreenError(errorMessage) {
+  console.error('[Background] Offscreen error:', errorMessage);
+  
+  // CRITICAL: Reset state on offscreen error
+  forceResetState();
+  
+  showNotification('Recording Error', errorMessage || 'Recording failed');
+}
+
 async function uploadToServer(videoBlob, recordingName, mimeType) {
-  console.log('[Background] uploadToServer called');
-  console.log('[Background] Recording name:', recordingName);
-  console.log('[Background] Blob size:', videoBlob.size, 'bytes (', (videoBlob.size / (1024*1024)).toFixed(2), 'MB)');
-  console.log('[Background] MIME type:', mimeType);
+  console.log('[Background] Uploading:', recordingName, videoBlob.size, 'bytes');
   
   try {
-    // CRITICAL VALIDATION: Verify blob integrity
-    if (!videoBlob || videoBlob.size === 0) {
-      throw new Error('Video blob is empty or null');
-    }
-    
-    if (videoBlob.size < 10000) {
-      throw new Error(`Video blob too small (${videoBlob.size} bytes). Recording likely failed.`);
-    }
-    
-    // Try to read first few bytes to verify it's valid
-    console.log('[Background] Validating blob integrity...');
+    // Validate WebM header
     const testSlice = videoBlob.slice(0, 100);
     const testArrayBuffer = await testSlice.arrayBuffer();
     const testArray = new Uint8Array(testArrayBuffer);
     
-    console.log('[Background] First 10 bytes:', Array.from(testArray.slice(0, 10)));
+    console.log('[Background] First 4 bytes:', Array.from(testArray.slice(0, 4)));
     
-    // Check for WebM signature (0x1A 0x45 0xDF 0xA3)
     if (testArray[0] === 0x1A && testArray[1] === 0x45 && testArray[2] === 0xDF && testArray[3] === 0xA3) {
-      console.log('[Background] ✓ Valid WebM header detected');
+      console.log('[Background] ✓ Valid WebM header');
     } else {
-      console.warn('[Background] WARNING: WebM header not found, file may be corrupted');
-      console.warn('[Background] Proceeding anyway, but ffmpeg may fail');
+      console.warn('[Background] WARNING: Invalid WebM header');
     }
     
-    // Prepare form data
     const formData = new FormData();
-    
-    // Determine file extension
-    const getExtension = (type) => {
-      if (!type) return 'webm';
-      if (/webm/.test(type)) return 'webm';
-      if (/mp4/.test(type)) return 'mp4';
-      if (/ogg/.test(type)) return 'ogg';
-      return 'webm';
-    };
-    
-    const extension = getExtension(mimeType);
+    const extension = /webm/.test(mimeType) ? 'webm' : 'mp4';
     const sanitizedName = recordingName.replace(/[<>:"/\\|?*]/g, '_');
     const filename = `${sanitizedName}.${extension}`;
     
-    console.log('[Background] Final filename:', filename);
-    
-    // Append file and metadata
     formData.append('video', videoBlob, filename);
     formData.append('title', sanitizedName);
     
-    console.log('[Background] Starting upload to http://127.0.0.1:5000/upload...');
-    console.log('[Background] This may take several minutes for large files...');
+    console.log('[Background] Uploading to server...');
     
-    // Upload with long timeout (30 minutes for large files)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30 * 60 * 1000); // 30 minutes
+    const timeoutId = setTimeout(() => controller.abort(), 30 * 60 * 1000);
     
-    const uploadStartTime = Date.now();
-    
-    const response = await fetch('http://127.0.0.1:5000/upload', {
+    const uploadResponse = await fetch('http://127.0.0.1:5000/upload', {
       method: 'POST',
       body: formData,
       signal: controller.signal
@@ -307,122 +273,120 @@ async function uploadToServer(videoBlob, recordingName, mimeType) {
     
     clearTimeout(timeoutId);
     
-    const uploadDuration = ((Date.now() - uploadStartTime) / 1000).toFixed(2);
-    console.log('[Background] Upload completed in', uploadDuration, 'seconds');
-    console.log('[Background] Upload response status:', response.status);
+    const result = await uploadResponse.json();
     
-    // Parse response
-    const result = await response.json();
-    console.log('[Background] Upload result:', result);
-    
-    if (!response.ok) {
-      throw new Error(result.error || `Server error: ${response.status}`);
+    if (!uploadResponse.ok) {
+      throw new Error(result.error || `Server error: ${uploadResponse.status}`);
     }
     
-    // Success notification
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
-      title: 'POAi - Upload Complete ✓',
-      message: `"${sanitizedName}" uploaded successfully (${(videoBlob.size / (1024*1024)).toFixed(1)}MB). Processing in background...`
-    });
-    
-    console.log('[Background] ✓ Upload completed successfully');
+    console.log('[Background] ✓ Upload successful');
+    showNotification('Upload Complete ✓', `"${sanitizedName}" uploaded successfully!`);
     
   } catch (error) {
     console.error('[Background] Upload error:', error);
-    console.error('[Background] Error stack:', error.stack);
     
-    // Determine error message
-    let errorMessage = 'Upload failed';
+    let errorMessage = error.message;
     if (error.name === 'AbortError') {
-      errorMessage = 'Upload timed out after 30 minutes. File may be too large.';
+      errorMessage = 'Upload timed out (30 min)';
     } else if (error.message.includes('Failed to fetch')) {
-      errorMessage = 'Cannot connect to server. Is POAi running on http://127.0.0.1:5000?';
-    } else if (error.message.includes('too small') || error.message.includes('empty')) {
-      errorMessage = 'Recording failed - file is empty or corrupted. Please try again.';
-    } else {
-      errorMessage = error.message;
+      errorMessage = 'Cannot connect to server. Is it running?';
     }
     
-    // Error notification
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
-      title: 'POAi - Upload Failed ✗',
-      message: errorMessage
-    });
-    
+    showNotification('Upload Failed ✗', errorMessage);
     throw error;
   }
+}
+
+// ==================== State Management ====================
+
+function forceResetState() {
+  console.log('[Background] ===== FORCE RESET STATE =====');
+  
+  // Clear timeout
+  if (recordingTimeout) {
+    clearTimeout(recordingTimeout);
+    recordingTimeout = null;
+  }
+  
+  // Reset state
+  recordingState = {
+    isRecording: false,
+    name: '',
+    startTime: null,
+    tabId: null
+  };
+  
+  // Update UI
+  updateBadge(false);
+  stopKeepAlive();
+  
+  console.log('[Background] State reset complete');
 }
 
 // ==================== Helper Functions ====================
 
 async function setupOffscreenDocument() {
-  console.log('[Background] setupOffscreenDocument called');
-  
-  // Check if offscreen document already exists
   const existingContexts = await chrome.runtime.getContexts({
     contextTypes: ['OFFSCREEN_DOCUMENT']
   });
 
   if (existingContexts.length > 0) {
-    console.log('[Background] Offscreen document already exists');
+    console.log('[Background] Offscreen exists');
     return;
   }
 
-  console.log('[Background] Creating offscreen document...');
+  console.log('[Background] Creating offscreen...');
   await chrome.offscreen.createDocument({
     url: 'offscreen.html',
     reasons: ['USER_MEDIA'],
-    justification: 'Record video and audio from tab with microphone mixing and audio monitoring',
+    justification: 'Record video and audio from tab with microphone',
   });
-  
-  console.log('[Background] Offscreen document created');
 }
 
 function updateBadge(recording) {
   if (recording) {
     chrome.action.setBadgeText({ text: '●' });
     chrome.action.setBadgeBackgroundColor({ color: '#e74c3c' });
-    console.log('[Background] Badge set to recording');
   } else {
     chrome.action.setBadgeText({ text: '' });
-    console.log('[Background] Badge cleared');
   }
 }
 
-// ==================== Keep-Alive Mechanism ====================
+function showNotification(title, message) {
+  chrome.notifications.create({
+    type: 'basic',
+    iconUrl: 'icons/icon128.png',
+    title: 'POAi - ' + title,
+    message: message
+  });
+}
+
+// ==================== Keep-Alive ====================
 
 let keepAliveInterval;
 
 function startKeepAlive() {
   if (keepAliveInterval) return;
-  
   keepAliveInterval = setInterval(() => {
-    chrome.runtime.getPlatformInfo(() => {
-      // Just to keep service worker alive
-    });
-  }, 20000); // Every 20 seconds
-  
-  console.log('[Background] Keep-alive started');
+    chrome.runtime.getPlatformInfo(() => {});
+  }, 20000);
 }
 
 function stopKeepAlive() {
   if (keepAliveInterval) {
     clearInterval(keepAliveInterval);
     keepAliveInterval = null;
-    console.log('[Background] Keep-alive stopped');
   }
 }
 
-// ==================== Extension Lifecycle ====================
+// ==================== Lifecycle ====================
 
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('[Background] POAi v2.0 extension installed');
+  console.log('[Background] Extension installed');
+  forceResetState(); // Ensure clean state
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  console.log('[Background] POAi v2.0 extension started');
+  console.log('[Background] Extension started');
+  forceResetState(); // Ensure clean state
 });

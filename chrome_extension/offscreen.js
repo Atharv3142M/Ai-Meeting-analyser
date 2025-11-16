@@ -1,16 +1,14 @@
 /**
- * POAi v2.0 - Offscreen Recording Script
+ * POAi v2.0 - Offscreen Recording Script (FIXED ERROR HANDLING)
  * 
- * This script runs in a hidden offscreen document and handles:
- * 1. Capturing tab video + audio via tabCapture stream
- * 2. Capturing microphone audio
- * 3. Mixing tab audio and mic audio
- * 4. Routing audio to speakers (monitoring)
- * 5. Recording everything with MediaRecorder
- * 6. Safely packaging the final video blob
+ * KEY FIXES:
+ * 1. All errors are reported to background.js
+ * 2. Blob validation before sending
+ * 3. requestData() ensures complete recording
+ * 4. No timeslice for complete blob
  */
 
-console.log('[Offscreen] POAi v2.0 offscreen script loaded');
+console.log('[Offscreen] POAi v2.0 offscreen loaded');
 
 let mediaRecorder = null;
 let recordedChunks = [];
@@ -22,22 +20,23 @@ let tabStream = null;
 // ==================== Message Listener ====================
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('[Offscreen] Received message:', request.action);
+  console.log('[Offscreen] Message:', request.action);
   
   if (request.action === 'startOffscreenRecording') {
     startRecording(request.streamId)
       .then(() => {
-        console.log('[Offscreen] Recording started successfully');
+        console.log('[Offscreen] Start successful');
         sendResponse({ success: true });
       })
       .catch(err => {
-        console.error('[Offscreen] Failed to start recording:', err);
+        console.error('[Offscreen] Start failed:', err);
+        reportError('Failed to start recording: ' + err.message);
         sendResponse({ success: false, error: err.message });
       });
-    return true; // Keep port open for async response
+    return true;
 
   } else if (request.action === 'stopOffscreenRecording') {
-    console.log('[Offscreen] Stop recording requested');
+    console.log('[Offscreen] Stop requested');
     stopRecording();
     sendResponse({ success: true });
     return true;
@@ -47,18 +46,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // ==================== Recording Functions ====================
 
 async function startRecording(streamId) {
-  console.log('[Offscreen] startRecording called with streamId:', streamId);
+  console.log('[Offscreen] startRecording, streamId:', streamId);
   
-  // Check if already recording
   if (mediaRecorder && mediaRecorder.state === 'recording') {
-    console.warn('[Offscreen] Already recording');
-    return;
+    throw new Error('Already recording');
   }
   
   try {
-    // ==================== STEP 1: Capture Tab Video + Audio ====================
-    console.log('[Offscreen] Step 1: Capturing tab stream...');
-    
+    // Capture tab video + audio
+    console.log('[Offscreen] Capturing tab stream...');
     tabStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         mandatory: {
@@ -79,45 +75,32 @@ async function startRecording(streamId) {
       }
     });
     
-    console.log('[Offscreen] Tab stream captured');
+    console.log('[Offscreen] Tab stream OK');
     console.log('[Offscreen] Video tracks:', tabStream.getVideoTracks().length);
     console.log('[Offscreen] Audio tracks:', tabStream.getAudioTracks().length);
     
-    // Validate tab stream
     if (tabStream.getVideoTracks().length === 0) {
-      throw new Error('No video track in tab stream');
+      throw new Error('No video track captured');
     }
     if (tabStream.getAudioTracks().length === 0) {
-      throw new Error('No audio track in tab stream');
+      throw new Error('No audio track captured');
     }
 
-    // ==================== STEP 2: Setup Audio Context for Mixing + Monitoring ====================
-    console.log('[Offscreen] Step 2: Setting up audio context...');
-    
+    // Setup audio context for mixing + monitoring
+    console.log('[Offscreen] Setting up audio...');
     audioContext = new AudioContext();
+    const recordingDest = audioContext.createMediaStreamDestination();
+    const monitoringDest = audioContext.destination;
     
-    // Create two destinations
-    const recordingDestination = audioContext.createMediaStreamDestination();
-    const monitoringDestination = audioContext.destination; // User's speakers!
-    
-    console.log('[Offscreen] Audio context created');
-    
-    // ==================== STEP 3: Process Tab Audio ====================
-    console.log('[Offscreen] Step 3: Processing tab audio...');
-    
-    const tabAudioTracks = tabStream.getAudioTracks();
-    const tabAudioStream = new MediaStream(tabAudioTracks);
+    // Tab audio
+    const tabAudioStream = new MediaStream(tabStream.getAudioTracks());
     const tabAudioSource = audioContext.createMediaStreamSource(tabAudioStream);
+    tabAudioSource.connect(recordingDest);  // Recording
+    tabAudioSource.connect(monitoringDest); // Speakers
     
-    // Route tab audio to BOTH destinations
-    tabAudioSource.connect(recordingDestination);  // For recording
-    tabAudioSource.connect(monitoringDestination); // For user to hear
-    
-    console.log('[Offscreen] Tab audio routed to recording AND speakers');
+    console.log('[Offscreen] Tab audio routed');
 
-    // ==================== STEP 4: Capture Microphone (Optional) ====================
-    console.log('[Offscreen] Step 4: Attempting to capture microphone...');
-    
+    // Microphone (optional)
     try {
       micStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -128,181 +111,136 @@ async function startRecording(streamId) {
         video: false
       });
       
-      console.log('[Offscreen] Microphone captured');
-      
-      // Add mic to recording only (not to speakers to avoid echo)
       const micSource = audioContext.createMediaStreamSource(micStream);
-      micSource.connect(recordingDestination);
-      
-      console.log('[Offscreen] Microphone audio added to recording');
-      
+      micSource.connect(recordingDest);
+      console.log('[Offscreen] Mic added');
     } catch (micError) {
-      console.warn('[Offscreen] Microphone not available:', micError.message);
-      console.log('[Offscreen] Continuing without microphone');
+      console.warn('[Offscreen] No mic:', micError.message);
       micStream = null;
     }
 
-    // ==================== STEP 5: Create Combined Stream ====================
-    console.log('[Offscreen] Step 5: Creating combined stream...');
-    
-    // Combine video from tab + mixed audio
+    // Create combined stream
     const videoTracks = tabStream.getVideoTracks();
-    const mixedAudioTracks = recordingDestination.stream.getAudioTracks();
+    const mixedAudioTracks = recordingDest.stream.getAudioTracks();
     
     combinedStream = new MediaStream([
       ...videoTracks,
       ...mixedAudioTracks
     ]);
     
-    console.log('[Offscreen] Combined stream created');
-    console.log('[Offscreen] Final video tracks:', combinedStream.getVideoTracks().length);
-    console.log('[Offscreen] Final audio tracks:', combinedStream.getAudioTracks().length);
+    console.log('[Offscreen] Combined stream ready');
 
-    // ==================== STEP 6: Setup MediaRecorder ====================
-    console.log('[Offscreen] Step 6: Setting up MediaRecorder...');
-    
+    // Setup MediaRecorder (NO TIMESLICE for complete blob)
     recordedChunks = [];
-    
-    // CRITICAL: Let browser choose codec (most robust approach)
-    console.log('[Offscreen] Using browser default codec for maximum stability');
-    
     mediaRecorder = new MediaRecorder(combinedStream);
     
-    console.log('[Offscreen] MediaRecorder created');
-    console.log('[Offscreen] MIME type:', mediaRecorder.mimeType);
+    console.log('[Offscreen] MediaRecorder type:', mediaRecorder.mimeType);
 
-    // ==================== STEP 7: Setup Event Handlers ====================
-    console.log('[Offscreen] Step 7: Setting up event handlers...');
-    
+    // Data handler
     mediaRecorder.ondataavailable = (event) => {
       if (event.data && event.data.size > 0) {
         recordedChunks.push(event.data);
-        console.log('[Offscreen] Data chunk:', event.data.size, 'bytes');
+        console.log('[Offscreen] Chunk:', event.data.size, 'bytes');
       }
     };
 
+    // Stop handler (CRITICAL ERROR HANDLING)
     mediaRecorder.onstop = () => {
-      console.log('[Offscreen] ==================== RECORDING STOPPED ====================');
-      console.log('[Offscreen] Total chunks collected:', recordedChunks.length);
-      
-      // CRITICAL VALIDATION: Check if we have any data
-      if (recordedChunks.length === 0) {
-        console.error('[Offscreen] CRITICAL ERROR: No chunks recorded!');
-        console.error('[Offscreen] This indicates MediaRecorder never collected data');
-        cleanup();
-        
-        chrome.runtime.sendMessage({
-          action: 'recordingError',
-          error: 'No data recorded. Please try again.'
-        });
-        return;
-      }
+      console.log('[Offscreen] ===== RECORDING STOPPED =====');
+      console.log('[Offscreen] Chunks:', recordedChunks.length);
       
       try {
-        // Calculate total size first
+        // Validate chunks
+        if (recordedChunks.length === 0) {
+          throw new Error('No data recorded (0 chunks)');
+        }
+        
+        // Calculate size
         let totalSize = 0;
         for (let chunk of recordedChunks) {
           totalSize += chunk.size;
         }
         
-        console.log('[Offscreen] Total data size:', totalSize, 'bytes');
+        console.log('[Offscreen] Total size:', totalSize, 'bytes');
         
         if (totalSize === 0) {
-          console.error('[Offscreen] CRITICAL ERROR: Total size is 0!');
-          cleanup();
-          return;
+          throw new Error('No data recorded (0 bytes)');
         }
         
-        // Create final blob
+        if (totalSize < 10000) {
+          throw new Error(`Recording too small (${totalSize} bytes)`);
+        }
+        
+        // Create blob
         const mimeType = mediaRecorder.mimeType || 'video/webm';
         const videoBlob = new Blob(recordedChunks, { type: mimeType });
         
-        console.log('[Offscreen] Video blob created');
-        console.log('[Offscreen] Blob size:', videoBlob.size, 'bytes');
-        console.log('[Offscreen] Blob type:', videoBlob.type);
+        console.log('[Offscreen] Blob created:', videoBlob.size, 'bytes');
         
-        // CRITICAL VALIDATION: Verify blob size matches
+        // Double-check blob
         if (videoBlob.size !== totalSize) {
-          console.error('[Offscreen] WARNING: Blob size mismatch!');
-          console.error('[Offscreen] Expected:', totalSize, 'Got:', videoBlob.size);
+          console.warn('[Offscreen] Blob size mismatch!');
         }
         
-        // Final validation
-        if (videoBlob.size === 0) {
-          console.error('[Offscreen] CRITICAL ERROR: Final blob is empty!');
-          cleanup();
-          return;
+        if (videoBlob.size < 10000) {
+          throw new Error(`Blob too small (${videoBlob.size} bytes)`);
         }
         
-        if (videoBlob.size < 10000) { // Less than 10KB is suspicious
-          console.error('[Offscreen] CRITICAL ERROR: Blob too small:', videoBlob.size, 'bytes');
-          console.error('[Offscreen] Likely corrupted or incomplete recording');
-          cleanup();
-          return;
-        }
-        
-        console.log('[Offscreen] ✓ Blob validation passed');
+        console.log('[Offscreen] ✓ Validation passed');
         console.log('[Offscreen] Converting to base64...');
         
-        // Convert to base64 for transfer
+        // Convert and send
         const reader = new FileReader();
         
         reader.onloadend = () => {
-          console.log('[Offscreen] ✓ Blob converted to base64');
-          console.log('[Offscreen] Base64 length:', reader.result.length, 'characters');
-          console.log('[Offscreen] Sending blobReady message to background...');
+          console.log('[Offscreen] ✓ Base64 ready, sending to background...');
           
-          // Send to background script
           chrome.runtime.sendMessage({
             action: 'blobReady',
             blobData: reader.result,
             mimeType: videoBlob.type,
             size: videoBlob.size
           }).then(() => {
-            console.log('[Offscreen] ✓ Blob sent successfully to background');
+            console.log('[Offscreen] ✓ Blob sent successfully');
             cleanup();
           }).catch(err => {
-            console.error('[Offscreen] ERROR sending blob to background:', err);
+            console.error('[Offscreen] Send error:', err);
+            reportError('Failed to send recording: ' + err.message);
             cleanup();
           });
         };
         
         reader.onerror = () => {
-          console.error('[Offscreen] FileReader error:', reader.error);
-          cleanup();
+          throw new Error('FileReader failed: ' + reader.error);
         };
         
         reader.readAsDataURL(videoBlob);
         
       } catch (error) {
-        console.error('[Offscreen] Error in onstop handler:', error);
-        console.error('[Offscreen] Error stack:', error.stack);
+        console.error('[Offscreen] onstop error:', error);
+        reportError('Recording processing failed: ' + error.message);
         cleanup();
       }
     };
 
+    // Error handler
     mediaRecorder.onerror = (event) => {
       console.error('[Offscreen] MediaRecorder error:', event.error);
+      reportError('MediaRecorder error: ' + event.error.message);
       cleanup();
     };
 
-    // ==================== STEP 8: Start Recording ====================
-    console.log('[Offscreen] Step 8: Starting recording...');
-    
-    // CRITICAL FIX: Start WITHOUT timeslice for complete blob
-    // Using timeslice can cause incomplete final chunk
+    // Start recording (NO TIMESLICE)
     mediaRecorder.start();
     
-    console.log('[Offscreen] ==================== RECORDING STARTED ====================');
-    console.log('[Offscreen] ✓ Tab video captured');
-    console.log('[Offscreen] ✓ Tab audio captured');
-    console.log('[Offscreen] ✓ User can hear tab audio (monitoring enabled)');
-    console.log('[Offscreen] ✓ Microphone:', micStream ? 'captured' : 'not available');
-    console.log('[Offscreen] Recording state:', mediaRecorder.state);
-    console.log('[Offscreen] IMPORTANT: Recording without timeslice for complete blob');
+    console.log('[Offscreen] ===== RECORDING STARTED =====');
+    console.log('[Offscreen] ✓ Video captured');
+    console.log('[Offscreen] ✓ Audio captured');
+    console.log('[Offscreen] ✓ Monitoring enabled');
+    console.log('[Offscreen] ✓ Mic:', micStream ? 'Yes' : 'No');
 
   } catch (error) {
-    console.error('[Offscreen] Error in startRecording:', error);
+    console.error('[Offscreen] Start error:', error);
     cleanup();
     throw error;
   }
@@ -312,85 +250,93 @@ function stopRecording() {
   console.log('[Offscreen] stopRecording called');
   
   if (!mediaRecorder) {
-    console.error('[Offscreen] MediaRecorder is null');
+    console.error('[Offscreen] No mediaRecorder');
+    reportError('Cannot stop: no active recorder');
     return;
   }
   
   if (mediaRecorder.state !== 'recording') {
-    console.warn('[Offscreen] MediaRecorder not recording, state:', mediaRecorder.state);
+    console.warn('[Offscreen] Not recording, state:', mediaRecorder.state);
     return;
   }
   
-  console.log('[Offscreen] Stopping MediaRecorder...');
-  console.log('[Offscreen] Current state:', mediaRecorder.state);
-  console.log('[Offscreen] Current chunks collected:', recordedChunks.length);
+  console.log('[Offscreen] Requesting final data...');
+  console.log('[Offscreen] Current chunks:', recordedChunks.length);
   
-  // CRITICAL: Request final data before stopping
-  if (mediaRecorder.state === 'recording') {
+  try {
+    // CRITICAL: Request final data before stopping
     mediaRecorder.requestData();
     console.log('[Offscreen] Final data requested');
     
-    // Give time for final chunk, then stop
+    // Wait for final chunk, then stop
     setTimeout(() => {
       if (mediaRecorder && mediaRecorder.state === 'recording') {
+        console.log('[Offscreen] Stopping MediaRecorder...');
         mediaRecorder.stop();
-        console.log('[Offscreen] Stop signal sent after delay');
+        console.log('[Offscreen] Stop signal sent');
+      } else {
+        console.warn('[Offscreen] Recorder already stopped');
       }
-    }, 500); // 500ms delay ensures all data is collected
+    }, 500); // 500ms delay
+    
+  } catch (error) {
+    console.error('[Offscreen] Stop error:', error);
+    reportError('Failed to stop recording: ' + error.message);
+    cleanup();
   }
 }
 
 function cleanup() {
-  console.log('[Offscreen] cleanup called');
-  console.log('[Offscreen] Cleaning up all resources...');
+  console.log('[Offscreen] Cleaning up...');
   
-  // Stop all tracks
   if (tabStream) {
-    tabStream.getTracks().forEach(track => {
-      track.stop();
-      console.log('[Offscreen] Stopped tab track:', track.kind);
-    });
+    tabStream.getTracks().forEach(track => track.stop());
     tabStream = null;
   }
   
   if (micStream) {
-    micStream.getTracks().forEach(track => {
-      track.stop();
-      console.log('[Offscreen] Stopped mic track:', track.kind);
-    });
+    micStream.getTracks().forEach(track => track.stop());
     micStream = null;
   }
   
   if (combinedStream) {
-    combinedStream.getTracks().forEach(track => {
-      track.stop();
-      console.log('[Offscreen] Stopped combined track:', track.kind);
-    });
+    combinedStream.getTracks().forEach(track => track.stop());
     combinedStream = null;
   }
   
-  // Close audio context
   if (audioContext && audioContext.state !== 'closed') {
-    audioContext.close().then(() => {
-      console.log('[Offscreen] AudioContext closed');
-    }).catch(err => {
-      console.warn('[Offscreen] Error closing AudioContext:', err);
-    });
+    audioContext.close();
     audioContext = null;
   }
   
-  // Reset state
   mediaRecorder = null;
   recordedChunks = [];
   
   console.log('[Offscreen] Cleanup complete');
 }
 
-// ==================== Page Lifecycle ====================
+// ==================== Error Reporting ====================
+
+function reportError(errorMessage) {
+  console.error('[Offscreen] Reporting error to background:', errorMessage);
+  
+  try {
+    chrome.runtime.sendMessage({
+      action: 'recordingError',
+      error: errorMessage
+    }).catch(err => {
+      console.error('[Offscreen] Could not report error:', err);
+    });
+  } catch (e) {
+    console.error('[Offscreen] Error reporting failed:', e);
+  }
+}
+
+// ==================== Lifecycle ====================
 
 window.addEventListener('beforeunload', () => {
-  console.log('[Offscreen] Page unloading, cleaning up...');
+  console.log('[Offscreen] Page unloading');
   cleanup();
 });
 
-console.log('[Offscreen] Ready to record');
+console.log('[Offscreen] Ready');
