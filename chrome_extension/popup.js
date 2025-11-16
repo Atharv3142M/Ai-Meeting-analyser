@@ -61,6 +61,12 @@ startBtn.addEventListener('click', async () => {
 stopBtn.addEventListener('click', async () => {
   console.log('[Popup] Stop button clicked');
   
+  // Show warning
+  const stopWarning = document.getElementById('stopWarning');
+  if (stopWarning) {
+    stopWarning.style.display = 'block';
+  }
+  
   stopBtn.disabled = true;
   stopBtn.textContent = 'Stopping...';
   
@@ -69,19 +75,30 @@ stopBtn.addEventListener('click', async () => {
     
     if (response && response.success) {
       console.log('[Popup] Recording stopped successfully');
-      showNotification('Recording stopped. Processing...', 'success');
-      updateUIToStopped();
+      
+      // Show processing message
+      stopBtn.textContent = 'Processing...';
+      
+      // Give user feedback
+      showNotification('Recording stopped. Finalizing file...', 'info');
+      
+      // Wait a moment before updating UI
+      setTimeout(() => {
+        updateUIToStopped();
+      }, 2000);
     } else {
       console.error('[Popup] Failed to stop recording:', response?.error);
       showNotification(response?.error || 'Failed to stop recording', 'error');
       stopBtn.disabled = false;
       stopBtn.innerHTML = '<span class="icon">⏹️</span> Finish Recording';
+      if (stopWarning) stopWarning.style.display = 'none';
     }
   } catch (error) {
     console.error('[Popup] Error stopping recording:', error);
     showNotification('Error: ' + error.message, 'error');
     stopBtn.disabled = false;
     stopBtn.innerHTML = '<span class="icon">⏹️</span> Finish Recording';
+    if (stopWarning) stopWarning.style.display = 'none';
   }
 });
 

@@ -249,6 +249,9 @@
                     <span class="status-text">RECORDING IN PROGRESS</span>
                 </div>
                 <div class="timer" id="recordingTime">00:00</div>
+                <div style="margin-top: 8px; font-size: 11px; color: #d63031;">
+                    ⚠️ Wait at least 10 seconds before stopping
+                </div>
             </div>
 
             <button class="btn btn-primary" id="startBtn">
@@ -260,6 +263,10 @@
                 <span class="icon">⏹️</span>
                 Finish Recording
             </button>
+            
+            <div style="display: none; background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; padding: 12px; margin-bottom: 12px; font-size: 12px;" id="stopWarning">
+                <strong>⚠️ Important:</strong> Wait 3 seconds after clicking stop for file to finalize.
+            </div>
 
             <div class="divider"></div>
 

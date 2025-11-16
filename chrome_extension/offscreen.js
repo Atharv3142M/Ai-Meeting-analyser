@@ -183,36 +183,73 @@ async function startRecording(streamId) {
 
     mediaRecorder.onstop = () => {
       console.log('[Offscreen] ==================== RECORDING STOPPED ====================');
-      console.log('[Offscreen] Total chunks:', recordedChunks.length);
+      console.log('[Offscreen] Total chunks collected:', recordedChunks.length);
+      
+      // CRITICAL VALIDATION: Check if we have any data
+      if (recordedChunks.length === 0) {
+        console.error('[Offscreen] CRITICAL ERROR: No chunks recorded!');
+        console.error('[Offscreen] This indicates MediaRecorder never collected data');
+        cleanup();
+        
+        chrome.runtime.sendMessage({
+          action: 'recordingError',
+          error: 'No data recorded. Please try again.'
+        });
+        return;
+      }
       
       try {
+        // Calculate total size first
+        let totalSize = 0;
+        for (let chunk of recordedChunks) {
+          totalSize += chunk.size;
+        }
+        
+        console.log('[Offscreen] Total data size:', totalSize, 'bytes');
+        
+        if (totalSize === 0) {
+          console.error('[Offscreen] CRITICAL ERROR: Total size is 0!');
+          cleanup();
+          return;
+        }
+        
         // Create final blob
         const mimeType = mediaRecorder.mimeType || 'video/webm';
         const videoBlob = new Blob(recordedChunks, { type: mimeType });
         
         console.log('[Offscreen] Video blob created');
-        console.log('[Offscreen] Size:', videoBlob.size, 'bytes');
-        console.log('[Offscreen] Type:', videoBlob.type);
+        console.log('[Offscreen] Blob size:', videoBlob.size, 'bytes');
+        console.log('[Offscreen] Blob type:', videoBlob.type);
         
-        // Validate blob
+        // CRITICAL VALIDATION: Verify blob size matches
+        if (videoBlob.size !== totalSize) {
+          console.error('[Offscreen] WARNING: Blob size mismatch!');
+          console.error('[Offscreen] Expected:', totalSize, 'Got:', videoBlob.size);
+        }
+        
+        // Final validation
         if (videoBlob.size === 0) {
-          console.error('[Offscreen] ERROR: Blob is empty!');
+          console.error('[Offscreen] CRITICAL ERROR: Final blob is empty!');
           cleanup();
           return;
         }
         
-        if (videoBlob.size < 1000) {
-          console.error('[Offscreen] ERROR: Blob too small, likely corrupted');
+        if (videoBlob.size < 10000) { // Less than 10KB is suspicious
+          console.error('[Offscreen] CRITICAL ERROR: Blob too small:', videoBlob.size, 'bytes');
+          console.error('[Offscreen] Likely corrupted or incomplete recording');
           cleanup();
           return;
         }
+        
+        console.log('[Offscreen] ✓ Blob validation passed');
+        console.log('[Offscreen] Converting to base64...');
         
         // Convert to base64 for transfer
-        console.log('[Offscreen] Converting blob to base64...');
         const reader = new FileReader();
         
         reader.onloadend = () => {
-          console.log('[Offscreen] Blob converted to base64');
+          console.log('[Offscreen] ✓ Blob converted to base64');
+          console.log('[Offscreen] Base64 length:', reader.result.length, 'characters');
           console.log('[Offscreen] Sending blobReady message to background...');
           
           // Send to background script
@@ -222,10 +259,10 @@ async function startRecording(streamId) {
             mimeType: videoBlob.type,
             size: videoBlob.size
           }).then(() => {
-            console.log('[Offscreen] Blob sent successfully');
+            console.log('[Offscreen] ✓ Blob sent successfully to background');
             cleanup();
           }).catch(err => {
-            console.error('[Offscreen] Error sending blob:', err);
+            console.error('[Offscreen] ERROR sending blob to background:', err);
             cleanup();
           });
         };
@@ -238,7 +275,8 @@ async function startRecording(streamId) {
         reader.readAsDataURL(videoBlob);
         
       } catch (error) {
-        console.error('[Offscreen] Error processing blob:', error);
+        console.error('[Offscreen] Error in onstop handler:', error);
+        console.error('[Offscreen] Error stack:', error.stack);
         cleanup();
       }
     };
@@ -251,8 +289,9 @@ async function startRecording(streamId) {
     // ==================== STEP 8: Start Recording ====================
     console.log('[Offscreen] Step 8: Starting recording...');
     
-    // Start with 10 second timeslice for better stability
-    mediaRecorder.start(10000);
+    // CRITICAL FIX: Start WITHOUT timeslice for complete blob
+    // Using timeslice can cause incomplete final chunk
+    mediaRecorder.start();
     
     console.log('[Offscreen] ==================== RECORDING STARTED ====================');
     console.log('[Offscreen] ✓ Tab video captured');
@@ -260,6 +299,7 @@ async function startRecording(streamId) {
     console.log('[Offscreen] ✓ User can hear tab audio (monitoring enabled)');
     console.log('[Offscreen] ✓ Microphone:', micStream ? 'captured' : 'not available');
     console.log('[Offscreen] Recording state:', mediaRecorder.state);
+    console.log('[Offscreen] IMPORTANT: Recording without timeslice for complete blob');
 
   } catch (error) {
     console.error('[Offscreen] Error in startRecording:', error);
@@ -271,17 +311,32 @@ async function startRecording(streamId) {
 function stopRecording() {
   console.log('[Offscreen] stopRecording called');
   
-  if (mediaRecorder && mediaRecorder.state === 'recording') {
-    console.log('[Offscreen] Stopping MediaRecorder...');
-    console.log('[Offscreen] Current state:', mediaRecorder.state);
+  if (!mediaRecorder) {
+    console.error('[Offscreen] MediaRecorder is null');
+    return;
+  }
+  
+  if (mediaRecorder.state !== 'recording') {
+    console.warn('[Offscreen] MediaRecorder not recording, state:', mediaRecorder.state);
+    return;
+  }
+  
+  console.log('[Offscreen] Stopping MediaRecorder...');
+  console.log('[Offscreen] Current state:', mediaRecorder.state);
+  console.log('[Offscreen] Current chunks collected:', recordedChunks.length);
+  
+  // CRITICAL: Request final data before stopping
+  if (mediaRecorder.state === 'recording') {
+    mediaRecorder.requestData();
+    console.log('[Offscreen] Final data requested');
     
-    // This will trigger the onstop handler
-    mediaRecorder.stop();
-    
-    console.log('[Offscreen] Stop signal sent');
-  } else {
-    console.warn('[Offscreen] MediaRecorder not recording');
-    console.log('[Offscreen] Current state:', mediaRecorder?.state || 'null');
+    // Give time for final chunk, then stop
+    setTimeout(() => {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        console.log('[Offscreen] Stop signal sent after delay');
+      }
+    }, 500); // 500ms delay ensures all data is collected
   }
 }
 

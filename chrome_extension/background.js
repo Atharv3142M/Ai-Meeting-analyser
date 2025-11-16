@@ -239,10 +239,35 @@ async function handleBlobReady(blobData, mimeType, size) {
 async function uploadToServer(videoBlob, recordingName, mimeType) {
   console.log('[Background] uploadToServer called');
   console.log('[Background] Recording name:', recordingName);
-  console.log('[Background] Blob size:', videoBlob.size, 'bytes');
+  console.log('[Background] Blob size:', videoBlob.size, 'bytes (', (videoBlob.size / (1024*1024)).toFixed(2), 'MB)');
   console.log('[Background] MIME type:', mimeType);
   
   try {
+    // CRITICAL VALIDATION: Verify blob integrity
+    if (!videoBlob || videoBlob.size === 0) {
+      throw new Error('Video blob is empty or null');
+    }
+    
+    if (videoBlob.size < 10000) {
+      throw new Error(`Video blob too small (${videoBlob.size} bytes). Recording likely failed.`);
+    }
+    
+    // Try to read first few bytes to verify it's valid
+    console.log('[Background] Validating blob integrity...');
+    const testSlice = videoBlob.slice(0, 100);
+    const testArrayBuffer = await testSlice.arrayBuffer();
+    const testArray = new Uint8Array(testArrayBuffer);
+    
+    console.log('[Background] First 10 bytes:', Array.from(testArray.slice(0, 10)));
+    
+    // Check for WebM signature (0x1A 0x45 0xDF 0xA3)
+    if (testArray[0] === 0x1A && testArray[1] === 0x45 && testArray[2] === 0xDF && testArray[3] === 0xA3) {
+      console.log('[Background] ✓ Valid WebM header detected');
+    } else {
+      console.warn('[Background] WARNING: WebM header not found, file may be corrupted');
+      console.warn('[Background] Proceeding anyway, but ffmpeg may fail');
+    }
+    
     // Prepare form data
     const formData = new FormData();
     
@@ -259,17 +284,20 @@ async function uploadToServer(videoBlob, recordingName, mimeType) {
     const sanitizedName = recordingName.replace(/[<>:"/\\|?*]/g, '_');
     const filename = `${sanitizedName}.${extension}`;
     
-    console.log('[Background] Filename:', filename);
+    console.log('[Background] Final filename:', filename);
     
     // Append file and metadata
     formData.append('video', videoBlob, filename);
     formData.append('title', sanitizedName);
     
-    console.log('[Background] Uploading to http://127.0.0.1:5000/upload...');
+    console.log('[Background] Starting upload to http://127.0.0.1:5000/upload...');
+    console.log('[Background] This may take several minutes for large files...');
     
     // Upload with long timeout (30 minutes for large files)
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30 * 60 * 1000); // 30 minutes
+    
+    const uploadStartTime = Date.now();
     
     const response = await fetch('http://127.0.0.1:5000/upload', {
       method: 'POST',
@@ -279,6 +307,8 @@ async function uploadToServer(videoBlob, recordingName, mimeType) {
     
     clearTimeout(timeoutId);
     
+    const uploadDuration = ((Date.now() - uploadStartTime) / 1000).toFixed(2);
+    console.log('[Background] Upload completed in', uploadDuration, 'seconds');
     console.log('[Background] Upload response status:', response.status);
     
     // Parse response
@@ -293,14 +323,15 @@ async function uploadToServer(videoBlob, recordingName, mimeType) {
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icons/icon128.png',
-      title: 'POAi - Upload Complete',
-      message: `"${sanitizedName}" uploaded successfully. Processing in background...`
+      title: 'POAi - Upload Complete ✓',
+      message: `"${sanitizedName}" uploaded successfully (${(videoBlob.size / (1024*1024)).toFixed(1)}MB). Processing in background...`
     });
     
-    console.log('[Background] Upload completed successfully');
+    console.log('[Background] ✓ Upload completed successfully');
     
   } catch (error) {
     console.error('[Background] Upload error:', error);
+    console.error('[Background] Error stack:', error.stack);
     
     // Determine error message
     let errorMessage = 'Upload failed';
@@ -308,6 +339,8 @@ async function uploadToServer(videoBlob, recordingName, mimeType) {
       errorMessage = 'Upload timed out after 30 minutes. File may be too large.';
     } else if (error.message.includes('Failed to fetch')) {
       errorMessage = 'Cannot connect to server. Is POAi running on http://127.0.0.1:5000?';
+    } else if (error.message.includes('too small') || error.message.includes('empty')) {
+      errorMessage = 'Recording failed - file is empty or corrupted. Please try again.';
     } else {
       errorMessage = error.message;
     }
@@ -316,7 +349,7 @@ async function uploadToServer(videoBlob, recordingName, mimeType) {
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icons/icon128.png',
-      title: 'POAi - Upload Failed',
+      title: 'POAi - Upload Failed ✗',
       message: errorMessage
     });
     

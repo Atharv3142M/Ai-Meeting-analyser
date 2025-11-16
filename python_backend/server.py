@@ -225,9 +225,38 @@ def compress_video_ffmpeg(input_path, output_path):
         raise
 
 def process_recording_pipeline(recording_id, video_path, audio_path, compressed_path):
-    """Background processing pipeline"""
+    """Background processing pipeline with robust error handling"""
     try:
         logger.info(f"Starting processing pipeline for recording: {recording_id}")
+        
+        # CRITICAL: Validate input file before processing
+        logger.info("Validating uploaded file...")
+        
+        if not os.path.exists(video_path):
+            raise Exception(f"Video file not found: {video_path}")
+        
+        file_size = os.path.getsize(video_path)
+        logger.info(f"Video file size: {file_size} bytes ({file_size / (1024*1024):.2f} MB)")
+        
+        if file_size == 0:
+            raise Exception("Video file is empty (0 bytes)")
+        
+        if file_size < 10000:
+            raise Exception(f"Video file too small ({file_size} bytes) - likely corrupted")
+        
+        # Validate WebM header
+        with open(video_path, 'rb') as f:
+            header = f.read(4)
+        
+        # WebM/MKV signature: 0x1A 0x45 0xDF 0xA3
+        expected_sig = bytes([0x1A, 0x45, 0xDF, 0xA3])
+        
+        if header != expected_sig:
+            logger.error(f"Invalid WebM header: {header.hex()}")
+            logger.error(f"Expected: {expected_sig.hex()}")
+            raise Exception(f"Invalid WebM header - file corrupted. Got: {header.hex()}")
+        
+        logger.info("✓ File validation passed - valid WebM header")
         
         # Step 1: Extract audio
         logger.info("Step 1/4: Extracting audio...")
@@ -288,12 +317,16 @@ def process_recording_pipeline(recording_id, video_path, audio_path, compressed_
             }}
         )
         
-        logger.info(f"Processing complete for recording: {recording_id}")
+        logger.info(f"✓ Processing complete for recording: {recording_id}")
         
     except Exception as e:
         error_msg = f"Processing failed: {str(e)}"
         logger.error(f"Recording {recording_id}: {error_msg}")
         logger.error(traceback.format_exc())
+        
+        # Check if it's a file corruption issue
+        if "EBML header" in str(e) or "Invalid data" in str(e) or "Invalid WebM header" in str(e):
+            error_msg = "File corrupted during recording. Please try again and wait 2-3 seconds before stopping."
         
         db.recordings.update_one(
             {'_id': ObjectId(recording_id)},
