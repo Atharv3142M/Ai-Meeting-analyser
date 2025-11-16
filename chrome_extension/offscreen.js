@@ -123,18 +123,71 @@ async function startRecording(streamId) {
     const videoTracks = tabStream.getVideoTracks();
     const mixedAudioTracks = recordingDest.stream.getAudioTracks();
     
+    console.log('[Offscreen] Combining tracks...');
+    console.log('[Offscreen] Video tracks to combine:', videoTracks.length);
+    console.log('[Offscreen] Audio tracks to combine:', mixedAudioTracks.length);
+    
+    // CRITICAL: Verify we have video
+    if (videoTracks.length === 0) {
+      throw new Error('No video tracks available for recording');
+    }
+    if (mixedAudioTracks.length === 0) {
+      throw new Error('No audio tracks available for recording');
+    }
+    
     combinedStream = new MediaStream([
       ...videoTracks,
       ...mixedAudioTracks
     ]);
     
     console.log('[Offscreen] Combined stream ready');
-
-    // Setup MediaRecorder (NO TIMESLICE for complete blob)
-    recordedChunks = [];
-    mediaRecorder = new MediaRecorder(combinedStream);
+    console.log('[Offscreen] Combined stream video tracks:', combinedStream.getVideoTracks().length);
+    console.log('[Offscreen] Combined stream audio tracks:', combinedStream.getAudioTracks().length);
     
-    console.log('[Offscreen] MediaRecorder type:', mediaRecorder.mimeType);
+    // CRITICAL: Final verification before MediaRecorder
+    if (combinedStream.getVideoTracks().length === 0) {
+      throw new Error('Combined stream has no video tracks!');
+    }
+    
+    // Log track details
+    const videoTrack = combinedStream.getVideoTracks()[0];
+    const audioTrack = combinedStream.getAudioTracks()[0];
+    console.log('[Offscreen] Video track settings:', videoTrack.getSettings());
+    console.log('[Offscreen] Audio track settings:', audioTrack.getSettings());
+
+    // Setup MediaRecorder with EXPLICIT video codec
+    recordedChunks = [];
+    
+    // CRITICAL FIX: Must specify mimeType to force video recording
+    // Without this, browser may create audio-only file
+    let mimeType = '';
+    const codecs = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm;codecs=h264,opus',
+      'video/webm'
+    ];
+    
+    for (const codec of codecs) {
+      if (MediaRecorder.isTypeSupported(codec)) {
+        mimeType = codec;
+        console.log('[Offscreen] Selected codec:', mimeType);
+        break;
+      }
+    }
+    
+    if (!mimeType) {
+      throw new Error('No supported video codec found');
+    }
+    
+    // Create MediaRecorder with explicit video codec
+    mediaRecorder = new MediaRecorder(combinedStream, {
+      mimeType: mimeType,
+      videoBitsPerSecond: 2500000, // 2.5 Mbps
+      audioBitsPerSecond: 128000   // 128 Kbps
+    });
+    
+    console.log('[Offscreen] MediaRecorder created with:', mediaRecorder.mimeType);
 
     // Data handler
     mediaRecorder.ondataavailable = (event) => {
@@ -176,6 +229,14 @@ async function startRecording(streamId) {
         const videoBlob = new Blob(recordedChunks, { type: mimeType });
         
         console.log('[Offscreen] Blob created:', videoBlob.size, 'bytes');
+        console.log('[Offscreen] Blob type:', videoBlob.type);
+        
+        // CRITICAL: Check if blob type indicates video
+        if (!videoBlob.type.startsWith('video/')) {
+          console.error('[Offscreen] ERROR: Blob is not video type!');
+          console.error('[Offscreen] Blob type:', videoBlob.type);
+          throw new Error(`Invalid blob type: ${videoBlob.type} (expected video/*)`);
+        }
         
         // Double-check blob
         if (videoBlob.size !== totalSize) {
@@ -186,7 +247,34 @@ async function startRecording(streamId) {
           throw new Error(`Blob too small (${videoBlob.size} bytes)`);
         }
         
-        console.log('[Offscreen] ✓ Validation passed');
+        // Read first bytes to verify it's actually WebM
+        console.log('[Offscreen] Verifying WebM header...');
+        const headerCheck = await new Promise((resolve) => {
+          const slice = videoBlob.slice(0, 100);
+          const reader = new FileReader();
+          reader.onload = () => {
+            const arr = new Uint8Array(reader.result);
+            console.log('[Offscreen] First 20 bytes:', Array.from(arr.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' '));
+            
+            // Check for WebM signature (0x1A 0x45 0xDF 0xA3)
+            if (arr[0] === 0x1A && arr[1] === 0x45 && arr[2] === 0xDF && arr[3] === 0xA3) {
+              console.log('[Offscreen] ✓ Valid WebM header detected');
+              resolve(true);
+            } else {
+              console.error('[Offscreen] ✗ Invalid WebM header!');
+              console.error('[Offscreen] Got:', arr.slice(0, 4));
+              console.error('[Offscreen] Expected: [1a, 45, df, a3]');
+              resolve(false);
+            }
+          };
+          reader.readAsArrayBuffer(slice);
+        });
+        
+        if (!headerCheck) {
+          throw new Error('Blob does not have valid WebM header - recording may be corrupted');
+        }
+        
+        console.log('[Offscreen] ✓ All validation passed');
         console.log('[Offscreen] Converting to base64...');
         
         // Convert and send

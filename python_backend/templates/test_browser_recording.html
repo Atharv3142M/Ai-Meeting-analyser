@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>POAi Browser Recording Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .test { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .pass { background: #d4edda; border-color: #c3e6cb; }
+        .fail { background: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        #output { white-space: pre-wrap; background: #f8f9fa; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>POAi Browser Recording Capability Test</h1>
+    <p>This page tests if your browser can properly record video + audio.</p>
+    
+    <div class="test">
+        <h2>Test 1: Check Codec Support</h2>
+        <button onclick="testCodecs()">Run Test</button>
+        <div id="codecResults"></div>
+    </div>
+    
+    <div class="test">
+        <h2>Test 2: Capture Screen & Record</h2>
+        <button onclick="testRecording()">Start Test Recording (5 sec)</button>
+        <div id="recordResults"></div>
+    </div>
+    
+    <div class="test">
+        <h2>Test 3: Check TabCapture (Extension Only)</h2>
+        <p>This test only works if run from extension context</p>
+        <button onclick="testTabCapture()">Test TabCapture</button>
+        <div id="tabResults"></div>
+    </div>
+    
+    <h2>Output Log:</h2>
+    <div id="output"></div>
+
+    <script>
+        function log(msg) {
+            const output = document.getElementById('output');
+            output.textContent += new Date().toISOString() + ': ' + msg + '\n';
+            console.log(msg);
+        }
+
+        function testCodecs() {
+            log('=== Testing Codec Support ===');
+            const codecs = [
+                'video/webm;codecs=vp9,opus',
+                'video/webm;codecs=vp8,opus',
+                'video/webm;codecs=h264,opus',
+                'video/webm',
+                'audio/webm;codecs=opus',
+                'audio/webm'
+            ];
+            
+            let html = '<ul>';
+            let hasVideoCodec = false;
+            
+            codecs.forEach(codec => {
+                const supported = MediaRecorder.isTypeSupported(codec);
+                const isVideo = codec.startsWith('video/');
+                if (isVideo && supported) hasVideoCodec = true;
+                
+                html += `<li>${codec}: <strong>${supported ? '✓ YES' : '✗ NO'}</strong></li>`;
+                log(`${codec}: ${supported}`);
+            });
+            
+            html += '</ul>';
+            
+            const result = document.getElementById('codecResults');
+            result.innerHTML = html;
+            result.parentElement.className = hasVideoCodec ? 'test pass' : 'test fail';
+            
+            if (!hasVideoCodec) {
+                log('ERROR: No video codec supported!');
+                result.innerHTML += '<p><strong>⚠️ WARNING: Your browser does not support video recording!</strong></p>';
+            } else {
+                log('✓ Video codecs supported');
+            }
+        }
+
+        async function testRecording() {
+            log('=== Testing Screen Recording ===');
+            const result = document.getElementById('recordResults');
+            
+            try {
+                log('Requesting display media...');
+                const stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: {
+                        width: 1280,
+                        height: 720
+                    },
+                    audio: true
+                });
+                
+                log('✓ Display media captured');
+                log(`Video tracks: ${stream.getVideoTracks().length}`);
+                log(`Audio tracks: ${stream.getAudioTracks().length}`);
+                
+                if (stream.getVideoTracks().length === 0) {
+                    throw new Error('No video track captured!');
+                }
+                
+                // Try to create MediaRecorder with video codec
+                const mimeType = 'video/webm;codecs=vp9,opus';
+                const recorder = new MediaRecorder(stream, {
+                    mimeType: mimeType,
+                    videoBitsPerSecond: 2500000
+                });
+                
+                log(`MediaRecorder created: ${recorder.mimeType}`);
+                
+                const chunks = [];
+                recorder.ondataavailable = e => {
+                    if (e.data.size > 0) {
+                        chunks.push(e.data);
+                        log(`Chunk received: ${e.data.size} bytes`);
+                    }
+                };
+                
+                recorder.onstop = async () => {
+                    log('Recording stopped');
+                    
+                    const blob = new Blob(chunks, { type: recorder.mimeType });
+                    log(`Blob created: ${blob.size} bytes, type: ${blob.type}`);
+                    
+                    // Check blob type
+                    if (!blob.type.startsWith('video/')) {
+                        log('✗ ERROR: Blob is not video type!');
+                        result.innerHTML = '<p><strong>✗ FAIL: Blob is audio-only!</strong></p>';
+                        result.parentElement.className = 'test fail';
+                        return;
+                    }
+                    
+                    // Check header
+                    const slice = blob.slice(0, 20);
+                    const arrayBuffer = await slice.arrayBuffer();
+                    const arr = new Uint8Array(arrayBuffer);
+                    const hex = Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                    log(`First 20 bytes: ${hex}`);
+                    
+                    // Check WebM signature
+                    if (arr[0] === 0x1A && arr[1] === 0x45 && arr[2] === 0xDF && arr[3] === 0xA3) {
+                        log('✓ Valid WebM header detected!');
+                        result.innerHTML = `
+                            <p><strong>✓ SUCCESS!</strong></p>
+                            <ul>
+                                <li>Blob size: ${blob.size} bytes</li>
+                                <li>Blob type: ${blob.type}</li>
+                                <li>Header: ${hex.substring(0, 23)} (WebM)</li>
+                            </ul>
+                        `;
+                        result.parentElement.className = 'test pass';
+                    } else {
+                        log('✗ Invalid WebM header!');
+                        const headerStr = String.fromCharCode(...arr.slice(0, 4));
+                        result.innerHTML = `
+                            <p><strong>✗ FAIL: Invalid header!</strong></p>
+                            <p>Expected: 1A 45 DF A3 (WebM)</p>
+                            <p>Got: ${hex.substring(0, 11)} ("${headerStr}")</p>
+                        `;
+                        result.parentElement.className = 'test fail';
+                    }
+                    
+                    // Stop all tracks
+                    stream.getTracks().forEach(track => track.stop());
+                };
+                
+                recorder.onerror = (e) => {
+                    log('✗ MediaRecorder error: ' + e.error);
+                };
+                
+                // Start recording
+                recorder.start();
+                log('Recording started, will stop in 5 seconds...');
+                
+                setTimeout(() => {
+                    recorder.stop();
+                }, 5000);
+                
+            } catch (error) {
+                log('✗ ERROR: ' + error.message);
+                result.innerHTML = `<p><strong>✗ ERROR:</strong> ${error.message}</p>`;
+                result.parentElement.className = 'test fail';
+            }
+        }
+
+        async function testTabCapture() {
+            log('=== Testing TabCapture API ===');
+            const result = document.getElementById('tabResults');
+            
+            if (typeof chrome === 'undefined' || !chrome.tabCapture) {
+                log('✗ TabCapture API not available (not in extension context)');
+                result.innerHTML = '<p>⚠️ This test only works when run from extension</p>';
+                return;
+            }
+            
+            log('✓ TabCapture API is available');
+            result.innerHTML = '<p>✓ TabCapture API available</p>';
+        }
+
+        // Auto-run codec test on load
+        window.addEventListener('load', () => {
+            testCodecs();
+        });
+    </script>
+</body>
+</html>
