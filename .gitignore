@@ -1,1 +1,76 @@
-Pythonpycache/*.pyc.envenv/venv/Large Media Files--- THIS IS THE IMPORTANT PART ---*.webm*.mp4*.mkv*.avi*.wavFolders for generated filesvideos/audio/compressed/logs/
+# POAi v2.0 - Chrome Extension .gitignore
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Chrome Extension Development
+*.pem
+*.crx
+*.zip
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+
+# Node modules (if using build tools)
+node_modules/
+
+# Python (if any Python scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+env/
+venv/
+ENV/
+
+# Backup files
+*.bak
+*.backup
+
+# OS generated files
+*.pid
+*.seed
+*.pid.lock
+
+# Test files
+test/
+tests/
+*.test.js
+
+# Documentation drafts
+NOTES.md
+TODO.md
+drafts/
+
+# Build artifacts
+dist/
+build/
+*.map
+
+# Editor files
+*.sublime-project
+*.sublime-workspace
+
+# Archive files
+*.tar.gz
+*.rar
+*.7z

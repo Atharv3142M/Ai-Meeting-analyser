@@ -19,7 +19,7 @@
         
         .container {
             background: white;
-            min-height: 420px;
+            min-height: 450px;
             display: flex;
             flex-direction: column;
         }
@@ -213,6 +213,20 @@
             font-size: 11px;
             color: #718096;
         }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -224,6 +238,8 @@
         </div>
 
         <div class="content">
+            <div class="error-message" id="errorMessage"></div>
+
             <div class="form-group">
                 <label for="recordingName">Recording Name</label>
                 <input type="text" 

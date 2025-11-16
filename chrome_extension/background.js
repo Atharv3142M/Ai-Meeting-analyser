@@ -1,23 +1,18 @@
 /**
- * POAi v2.0 - Background Service Worker (FIXED STATE MANAGEMENT)
- * 
- * KEY FIXES:
- * 1. State is ALWAYS reset after stop, even on error
- * 2. Errors from offscreen are properly handled
- * 3. Timeout mechanism ensures state never gets stuck
+ * POAi v2.0 - Background Service Worker
+ * FIXED: Uses desktopCapture for proper screen selection dialog
+ * FIXED: State management - resets on all errors including dialog cancellation
  */
 
-// Recording state (source of truth)
 let recordingState = {
   isRecording: false,
   name: '',
   startTime: null,
-  tabId: null
+  streamId: null
 };
 
-// Timeout to force state reset if something goes wrong
 let recordingTimeout = null;
-const MAX_RECORDING_TIME = 2 * 60 * 60 * 1000; // 2 hours max
+const MAX_RECORDING_TIME = 2 * 60 * 60 * 1000; // 2 hours
 
 console.log('[Background] POAi v2.0 service worker initialized');
 
@@ -33,7 +28,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       })
       .catch(error => {
         console.error('[Background] Start failed:', error);
-        // CRITICAL: Reset state on start failure
         forceResetState();
         sendResponse({ success: false, error: error.message });
       });
@@ -46,7 +40,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       })
       .catch(error => {
         console.error('[Background] Stop failed:', error);
-        // CRITICAL: Reset state on stop failure
         forceResetState();
         sendResponse({ success: false, error: error.message });
       });
@@ -67,20 +60,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     
   } else if (request.action === 'recordingError') {
     console.error('[Background] Recording error from offscreen:', request.error);
-    // CRITICAL: Handle offscreen errors
     handleOffscreenError(request.error);
     sendResponse({ success: true });
     return true;
-  }
-});
-
-// ==================== Tab Management ====================
-
-chrome.tabs.onRemoved.addListener((tabId) => {
-  if (recordingState.isRecording && recordingState.tabId === tabId) {
-    console.warn('[Background] Tab closed during recording');
-    forceResetState();
-    showNotification('Recording stopped', 'Tab was closed during recording');
   }
 });
 
@@ -93,47 +75,46 @@ async function handleStartRecording(recordingName) {
     throw new Error('Recording already in progress');
   }
 
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab || !tab.id) {
-    throw new Error('No active tab found');
-  }
-
-  if (tab.url?.startsWith('chrome://') || tab.url?.startsWith('chrome-extension://')) {
-    throw new Error('Cannot record browser internal pages');
-  }
-
-  const startTime = Date.now();
-  
-  // Set state BEFORE starting capture
-  recordingState = {
-    isRecording: true,
-    name: recordingName,
-    startTime: startTime,
-    tabId: tab.id
-  };
-  
-  // Set timeout to force reset after max recording time
-  recordingTimeout = setTimeout(() => {
-    console.warn('[Background] Recording timeout reached, forcing reset');
-    forceResetState();
-    showNotification('Recording stopped', 'Maximum recording time reached (2 hours)');
-  }, MAX_RECORDING_TIME);
-
   try {
-    // Get stream ID
-    const streamId = await chrome.tabCapture.getMediaStreamId({
-      targetTabId: tab.id
+    // FIXED: Use desktopCapture to show share dialog
+    const streamId = await new Promise((resolve, reject) => {
+      chrome.desktopCapture.chooseDesktopMedia(
+        ['screen', 'window', 'tab'],
+        (chosenStreamId, options) => {
+          if (!chosenStreamId) {
+            reject(new Error('User cancelled screen selection'));
+            return;
+          }
+          console.log('[Background] User selected stream:', chosenStreamId);
+          resolve(chosenStreamId);
+        }
+      );
     });
-    console.log('[Background] Got streamId:', streamId);
 
-    // Setup offscreen document
+    const startTime = Date.now();
+    
+    // Set state AFTER user selects screen
+    recordingState = {
+      isRecording: true,
+      name: recordingName,
+      startTime: startTime,
+      streamId: streamId
+    };
+    
+    // Set timeout
+    recordingTimeout = setTimeout(() => {
+      console.warn('[Background] Recording timeout reached');
+      forceResetState();
+      showNotification('Recording stopped', 'Maximum recording time reached (2 hours)');
+    }, MAX_RECORDING_TIME);
+
+    // Setup offscreen
     await setupOffscreenDocument();
 
     // Start recording
     await chrome.runtime.sendMessage({
       action: 'startOffscreenRecording',
-      streamId: streamId,
-      tabId: tab.id
+      streamId: streamId
     });
 
     updateBadge(true);
@@ -144,7 +125,6 @@ async function handleStartRecording(recordingName) {
     
   } catch (err) {
     console.error('[Background] Start recording failed:', err);
-    // CRITICAL: Reset state on failure
     forceResetState();
     throw err;
   }
@@ -164,21 +144,19 @@ async function handleStopRecording() {
     await chrome.runtime.sendMessage({ action: 'stopOffscreenRecording' });
     console.log('[Background] Stop signal sent');
     
-    // Don't reset state here - wait for blobReady or error
-    // But set a timeout in case offscreen never responds
+    // Timeout if offscreen doesn't respond
     setTimeout(() => {
       if (recordingState.isRecording) {
         console.error('[Background] Offscreen timeout, forcing reset');
         forceResetState();
         showNotification('Error', 'Recording stopped but file may not have been saved');
       }
-    }, 30000); // 30 second timeout
+    }, 30000);
     
     return { success: true, message: 'Stop signal sent' };
     
   } catch (sendError) {
     console.error('[Background] Error sending stop:', sendError);
-    // CRITICAL: Reset state if we can't even send stop signal
     forceResetState();
     throw sendError;
   }
@@ -188,7 +166,6 @@ async function handleBlobReady(blobData, mimeType, size) {
   console.log('[Background] handleBlobReady - size:', size, 'bytes');
   
   try {
-    // Validate
     if (!blobData || size === 0) {
       throw new Error('Invalid blob data');
     }
@@ -197,16 +174,14 @@ async function handleBlobReady(blobData, mimeType, size) {
       throw new Error(`Blob too small (${size} bytes)`);
     }
     
-    // Convert
     const response = await fetch(blobData);
     const videoBlob = await response.blob();
     
     console.log('[Background] Blob converted:', videoBlob.size, 'bytes');
     
-    // Save recording name before reset
     const recordingName = recordingState.name;
     
-    // CRITICAL: Reset state BEFORE upload (so popup shows correct state)
+    // Reset state BEFORE upload
     forceResetState();
     
     // Close offscreen
@@ -221,17 +196,13 @@ async function handleBlobReady(blobData, mimeType, size) {
     
   } catch (error) {
     console.error('[Background] Blob handling error:', error);
-    // State already reset above
     showNotification('Error', 'Failed to process recording: ' + error.message);
   }
 }
 
 function handleOffscreenError(errorMessage) {
   console.error('[Background] Offscreen error:', errorMessage);
-  
-  // CRITICAL: Reset state on offscreen error
   forceResetState();
-  
   showNotification('Recording Error', errorMessage || 'Recording failed');
 }
 
@@ -302,21 +273,18 @@ async function uploadToServer(videoBlob, recordingName, mimeType) {
 function forceResetState() {
   console.log('[Background] ===== FORCE RESET STATE =====');
   
-  // Clear timeout
   if (recordingTimeout) {
     clearTimeout(recordingTimeout);
     recordingTimeout = null;
   }
   
-  // Reset state
   recordingState = {
     isRecording: false,
     name: '',
     startTime: null,
-    tabId: null
+    streamId: null
   };
   
-  // Update UI
   updateBadge(false);
   stopKeepAlive();
   
@@ -339,7 +307,7 @@ async function setupOffscreenDocument() {
   await chrome.offscreen.createDocument({
     url: 'offscreen.html',
     reasons: ['USER_MEDIA'],
-    justification: 'Record video and audio from tab with microphone',
+    justification: 'Record video and audio from screen with microphone',
   });
 }
 
@@ -383,10 +351,10 @@ function stopKeepAlive() {
 
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[Background] Extension installed');
-  forceResetState(); // Ensure clean state
+  forceResetState();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   console.log('[Background] Extension started');
-  forceResetState(); // Ensure clean state
+  forceResetState();
 });

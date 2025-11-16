@@ -1,8 +1,8 @@
 /**
- * POAi v2.0 - Popup UI (Fixed State Management)
+ * POAi v2.0 - Popup UI
+ * Fixed state management and error handling
  */
 
-// DOM Elements
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const dashboardBtn = document.getElementById('dashboardBtn');
@@ -10,6 +10,7 @@ const recordingName = document.getElementById('recordingName');
 const recordingStatus = document.getElementById('recordingStatus');
 const recordingTime = document.getElementById('recordingTime');
 const divider = document.getElementById('divider');
+const errorMessage = document.getElementById('errorMessage');
 
 let recordingInterval;
 let seconds = 0;
@@ -22,7 +23,7 @@ startBtn.addEventListener('click', async () => {
   const name = recordingName.value.trim();
   
   if (!name) {
-    alert('Please enter a name for the recording');
+    showError('Please enter a name for the recording');
     recordingName.focus();
     return;
   }
@@ -30,6 +31,7 @@ startBtn.addEventListener('click', async () => {
   console.log('[Popup] Starting recording:', name);
   startBtn.disabled = true;
   startBtn.textContent = 'Starting...';
+  hideError();
 
   try {
     const response = await chrome.runtime.sendMessage({ 
@@ -43,12 +45,12 @@ startBtn.addEventListener('click', async () => {
       setTimeout(() => window.close(), 800);
     } else {
       console.error('[Popup] Failed to start:', response?.error);
-      alert('Error: ' + (response?.error || 'Failed to start recording'));
+      showError(response?.error || 'Failed to start recording');
       resetStartButton();
     }
   } catch (error) {
     console.error('[Popup] Error:', error);
-    alert('Error: ' + error.message);
+    showError(error.message || 'Failed to start recording');
     resetStartButton();
   }
 });
@@ -58,23 +60,26 @@ stopBtn.addEventListener('click', async () => {
   
   stopBtn.disabled = true;
   stopBtn.textContent = 'Stopping...';
+  hideError();
   
   try {
     const response = await chrome.runtime.sendMessage({ action: 'stopRecording' });
     
     if (response && response.success) {
       console.log('[Popup] Recording stopped successfully');
-      alert('Recording stopped! File will be uploaded shortly.\n\nCheck the dashboard in a moment.');
-      updateUIToStopped();
+      showError('Recording stopped! File will be uploaded shortly. Check the dashboard in a moment.');
+      setTimeout(() => {
+        updateUIToStopped();
+      }, 2000);
     } else {
       console.error('[Popup] Failed to stop:', response?.error);
-      alert('Error stopping: ' + (response?.error || 'Unknown error'));
+      showError(response?.error || 'Failed to stop recording');
       stopBtn.disabled = false;
       stopBtn.innerHTML = '<span>⏹️</span> Finish Recording';
     }
   } catch (error) {
     console.error('[Popup] Error:', error);
-    alert('Error: ' + error.message);
+    showError(error.message || 'Failed to stop recording');
     stopBtn.disabled = false;
     stopBtn.innerHTML = '<span>⏹️</span> Finish Recording';
   }
@@ -152,6 +157,15 @@ function updateTimer() {
   const secs = seconds % 60;
   recordingTime.textContent = 
     `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+function showError(message) {
+  errorMessage.textContent = message;
+  errorMessage.classList.add('show');
+}
+
+function hideError() {
+  errorMessage.classList.remove('show');
 }
 
 // ==================== State Restoration ====================
