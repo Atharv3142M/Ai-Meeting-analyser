@@ -1,416 +1,316 @@
-/**
- * POAi v2.0 - Offscreen Recording Script
- * FINAL FIX: Uses streamId from desktopCapture with getUserMedia
- * PREVENTS FILE CORRUPTION: Proper blob handling in onstop
- */
+// POAi v2.0 - Offscreen Recording Script
+// Handles screen capture, audio mixing, and MediaRecorder
 
-console.log('[Offscreen] POAi v2.0 offscreen loaded');
+console.log('[Offscreen] Script loaded');
 
 let mediaRecorder = null;
 let recordedChunks = [];
+let combinedStream = null;
 let audioContext = null;
-let desktopStream = null;
-let micStream = null;
+let audioDestination = null;
 
-// ==================== Message Listener ====================
+// ==================== Audio Mixing with Web Audio API ====================
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('[Offscreen] Message received:', request.action);
-  
-  if (request.action === 'startOffscreenRecording') {
-    startRecording(request.streamId)
-      .then(() => {
-        console.log('[Offscreen] Recording started successfully');
-        sendResponse({ success: true });
-      })
-      .catch(error => {
-        console.error('[Offscreen] Start failed:', error);
-        reportError('Failed to start: ' + error.message);
-        sendResponse({ success: false, error: error.message });
-      });
-    return true;
+async function createMixedAudioStream(displayStream) {
+    console.log('[Offscreen] Creating mixed audio stream...');
+    
+    try {
+        // Create Web Audio API context
+        audioContext = new AudioContext();
+        audioDestination = audioContext.createMediaStreamDestination();
+        
+        console.log('[Offscreen] Audio context created');
+        
+        let hasAudio = false;
+        
+        // 1. Mix system/tab audio from display stream
+        const displayAudioTracks = displayStream.getAudioTracks();
+        if (displayAudioTracks.length > 0) {
+            console.log('[Offscreen] Found display audio:', displayAudioTracks.length, 'tracks');
+            
+            for (const track of displayAudioTracks) {
+                try {
+                    const source = audioContext.createMediaStreamSource(
+                        new MediaStream([track])
+                    );
+                    source.connect(audioDestination);
+                    hasAudio = true;
+                    console.log('[Offscreen] Connected display audio track');
+                } catch (error) {
+                    console.warn('[Offscreen] Failed to connect display audio:', error);
+                }
+            }
+        } else {
+            console.warn('[Offscreen] No display audio tracks found');
+        }
+        
+        // 2. Try to add microphone audio
+        try {
+            console.log('[Offscreen] Requesting microphone audio...');
+            
+            const micStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            });
+            
+            const micTracks = micStream.getAudioTracks();
+            if (micTracks.length > 0) {
+                console.log('[Offscreen] Microphone audio granted:', micTracks.length, 'tracks');
+                
+                for (const track of micTracks) {
+                    try {
+                        const source = audioContext.createMediaStreamSource(
+                            new MediaStream([track])
+                        );
+                        source.connect(audioDestination);
+                        hasAudio = true;
+                        console.log('[Offscreen] Connected microphone track');
+                    } catch (error) {
+                        console.warn('[Offscreen] Failed to connect microphone:', error);
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn('[Offscreen] Microphone access denied or not available:', error.message);
+            // This is OK - we can record without mic
+        }
+        
+        if (!hasAudio) {
+            console.warn('[Offscreen] No audio sources available - recording video only');
+        }
+        
+        // Return the mixed audio stream
+        return audioDestination.stream;
+        
+    } catch (error) {
+        console.error('[Offscreen] Error creating mixed audio:', error);
+        throw error;
+    }
+}
 
-  } else if (request.action === 'stopOffscreenRecording') {
-    console.log('[Offscreen] Stop signal received');
-    stopRecording();
-    sendResponse({ success: true });
-    return true;
-  }
-});
-
-// ==================== Recording Functions ====================
+// ==================== Recording Control ====================
 
 async function startRecording(streamId) {
-  console.log('[Offscreen] ===== STARTING RECORDING =====');
-  console.log('[Offscreen] Stream ID:', streamId);
-  
-  if (mediaRecorder && mediaRecorder.state === 'recording') {
-    throw new Error('Already recording');
-  }
-  
-  try {
-    // CRITICAL FIX: Use getUserMedia with desktop stream ID
-    console.log('[Offscreen] Capturing desktop stream with ID...');
-    desktopStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        mandatory: {
-          chromeMediaSource: 'desktop',
-          chromeMediaSourceId: streamId
-        }
-      },
-      video: {
-        mandatory: {
-          chromeMediaSource: 'desktop',
-          chromeMediaSourceId: streamId,
-          minWidth: 1280,
-          maxWidth: 1920,
-          minHeight: 720,
-          maxHeight: 1080,
-          frameRate: 30
-        }
-      }
-    });
-    
-    console.log('[Offscreen] ✓ Desktop stream captured');
-    console.log('[Offscreen] Video tracks:', desktopStream.getVideoTracks().length);
-    console.log('[Offscreen] Audio tracks:', desktopStream.getAudioTracks().length);
-    
-    // Verify we have video
-    if (desktopStream.getVideoTracks().length === 0) {
-      throw new Error('No video track captured - user may have selected audio only');
-    }
-    
-    // Log track details for debugging
-    const videoTrack = desktopStream.getVideoTracks()[0];
-    const videoSettings = videoTrack.getSettings();
-    console.log('[Offscreen] Video track settings:', videoSettings);
-
-    // Setup audio context for mixing
-    console.log('[Offscreen] Setting up audio mixing...');
-    audioContext = new AudioContext();
-    
-    // Create two destinations: one for recording, one for monitoring (hearing audio)
-    const recordingDest = audioContext.createMediaStreamDestination();
-    const monitoringDest = audioContext.destination; // Speakers
-    
-    // Desktop audio (if available)
-    if (desktopStream.getAudioTracks().length > 0) {
-      const desktopAudioStream = new MediaStream(desktopStream.getAudioTracks());
-      const desktopAudioSource = audioContext.createMediaStreamSource(desktopAudioStream);
-      
-      // Route to both recording and speakers
-      desktopAudioSource.connect(recordingDest);
-      desktopAudioSource.connect(monitoringDest);
-      
-      console.log('[Offscreen] ✓ Desktop audio connected (you can hear it)');
-    } else {
-      console.warn('[Offscreen] No desktop audio track available');
-    }
-
-    // Capture microphone separately
-    console.log('[Offscreen] Requesting microphone access...');
     try {
-      micStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        },
-        video: false
-      });
-      
-      const micSource = audioContext.createMediaStreamSource(micStream);
-      micSource.connect(recordingDest); // Mix into recording
-      
-      console.log('[Offscreen] ✓ Microphone connected');
-    } catch (micError) {
-      console.warn('[Offscreen] Microphone not available:', micError.message);
-      console.warn('[Offscreen] Continuing without microphone...');
-      micStream = null;
-    }
-
-    // Create combined stream: video + mixed audio
-    const videoTracks = desktopStream.getVideoTracks();
-    const mixedAudioTracks = recordingDest.stream.getAudioTracks();
-    
-    console.log('[Offscreen] Creating combined stream...');
-    console.log('[Offscreen] - Video tracks to combine:', videoTracks.length);
-    console.log('[Offscreen] - Audio tracks to combine:', mixedAudioTracks.length);
-    
-    if (videoTracks.length === 0) {
-      throw new Error('No video tracks available for recording');
-    }
-    
-    const combinedStream = new MediaStream([
-      ...videoTracks,
-      ...mixedAudioTracks
-    ]);
-    
-    console.log('[Offscreen] ✓ Combined stream ready');
-    console.log('[Offscreen] Combined video tracks:', combinedStream.getVideoTracks().length);
-    console.log('[Offscreen] Combined audio tracks:', combinedStream.getAudioTracks().length);
-
-    // Setup MediaRecorder - CRITICAL: Use proper codec
-    recordedChunks = [];
-    
-    // Try codecs in order of preference
-    let mimeType = '';
-    const codecs = [
-      'video/webm;codecs=vp9,opus',
-      'video/webm;codecs=vp8,opus',
-      'video/webm;codecs=h264,opus',
-      'video/webm'
-    ];
-    
-    for (const codec of codecs) {
-      if (MediaRecorder.isTypeSupported(codec)) {
-        mimeType = codec;
-        console.log('[Offscreen] Selected codec:', mimeType);
-        break;
-      }
-    }
-    
-    if (!mimeType) {
-      console.warn('[Offscreen] No preferred codec supported, using browser default');
-      mediaRecorder = new MediaRecorder(combinedStream);
-    } else {
-      mediaRecorder = new MediaRecorder(combinedStream, {
-        mimeType: mimeType,
-        videoBitsPerSecond: 2500000,
-        audioBitsPerSecond: 128000
-      });
-    }
-    
-    console.log('[Offscreen] MediaRecorder created with type:', mediaRecorder.mimeType);
-
-    // Data handler - collect chunks
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data && event.data.size > 0) {
-        recordedChunks.push(event.data);
-        console.log('[Offscreen] Chunk received:', event.data.size, 'bytes', 
-                    `(total: ${recordedChunks.length} chunks)`);
-      }
-    };
-
-    // CRITICAL: Stop handler - this is where blob is created
-    // This MUST complete fully before sending to background
-    mediaRecorder.onstop = async () => {
-      console.log('[Offscreen] ===== RECORDING STOPPED =====');
-      console.log('[Offscreen] Processing recorded data...');
-      console.log('[Offscreen] Total chunks collected:', recordedChunks.length);
-      
-      try {
-        // Validate we have data
-        if (recordedChunks.length === 0) {
-          throw new Error('No data recorded (0 chunks)');
+        console.log('[Offscreen] Starting recording with stream ID:', streamId);
+        
+        // Step 1: Get display media stream from stream ID
+        const constraints = {
+            video: {
+                mandatory: {
+                    chromeMediaSource: 'desktop',
+                    chromeMediaSourceId: streamId
+                }
+            },
+            audio: {
+                mandatory: {
+                    chromeMediaSource: 'desktop',
+                    chromeMediaSourceId: streamId
+                }
+            }
+        };
+        
+        console.log('[Offscreen] Requesting display media...');
+        const displayStream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        console.log('[Offscreen] Display stream obtained:', {
+            videoTracks: displayStream.getVideoTracks().length,
+            audioTracks: displayStream.getAudioTracks().length
+        });
+        
+        // Validate video track
+        const videoTracks = displayStream.getVideoTracks();
+        if (videoTracks.length === 0) {
+            throw new Error('No video track in display stream');
         }
         
-        // Calculate total size
-        let totalSize = 0;
-        for (const chunk of recordedChunks) {
-          totalSize += chunk.size;
+        // Step 2: Create mixed audio stream
+        const mixedAudioStream = await createMixedAudioStream(displayStream);
+        
+        // Step 3: Combine video + mixed audio
+        combinedStream = new MediaStream([
+            ...displayStream.getVideoTracks(),
+            ...mixedAudioStream.getAudioTracks()
+        ]);
+        
+        console.log('[Offscreen] Combined stream created:', {
+            videoTracks: combinedStream.getVideoTracks().length,
+            audioTracks: combinedStream.getAudioTracks().length,
+            active: combinedStream.active
+        });
+        
+        // CRITICAL FIX: Validate stream is active before starting recorder
+        if (!combinedStream.active) {
+            throw new Error('Combined stream is not active');
         }
         
-        console.log('[Offscreen] Total size:', totalSize, 'bytes', 
-                    `(${(totalSize / 1024 / 1024).toFixed(2)} MB)`);
-        
-        if (totalSize === 0) {
-          throw new Error('No data recorded (0 bytes)');
+        if (combinedStream.getVideoTracks().length === 0) {
+            throw new Error('No video tracks in combined stream');
         }
         
-        if (totalSize < 10000) {
-          throw new Error(`Recording too small (${totalSize} bytes) - likely corrupted`);
-        }
+        // Step 4: Create MediaRecorder
+        const mimeType = 'video/webm;codecs=vp9,opus';
         
-        // Create blob with correct MIME type
-        const mimeType = mediaRecorder.mimeType || 'video/webm';
-        const videoBlob = new Blob(recordedChunks, { type: mimeType });
-        
-        console.log('[Offscreen] Blob created:');
-        console.log('[Offscreen] - Size:', videoBlob.size, 'bytes');
-        console.log('[Offscreen] - Type:', videoBlob.type);
-        
-        // CRITICAL: Verify blob type is video
-        if (!videoBlob.type.startsWith('video/')) {
-          throw new Error(`Invalid blob type: ${videoBlob.type} (expected video/*)`);
-        }
-        
-        // Verify blob size matches
-        if (videoBlob.size !== totalSize) {
-          console.warn('[Offscreen] WARNING: Blob size mismatch!');
-          console.warn('[Offscreen] Expected:', totalSize, 'Got:', videoBlob.size);
-        }
-        
-        // Verify WebM header to prevent corruption
-        console.log('[Offscreen] Verifying file header...');
-        const headerSlice = videoBlob.slice(0, 20);
-        const headerBuffer = await headerSlice.arrayBuffer();
-        const headerBytes = new Uint8Array(headerBuffer);
-        
-        const headerHex = Array.from(headerBytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
-        console.log('[Offscreen] First 20 bytes:', headerHex);
-        
-        // WebM signature: 0x1A 0x45 0xDF 0xA3
-        if (headerBytes[0] === 0x1A && headerBytes[1] === 0x45 && 
-            headerBytes[2] === 0xDF && headerBytes[3] === 0xA3) {
-          console.log('[Offscreen] ✓✓✓ VALID WebM header detected ✓✓✓');
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+            console.warn('[Offscreen] Preferred codec not supported, trying fallback...');
+            const fallbackType = 'video/webm';
+            
+            if (!MediaRecorder.isTypeSupported(fallbackType)) {
+                throw new Error('No supported video codecs found');
+            }
+            
+            mediaRecorder = new MediaRecorder(combinedStream, {
+                mimeType: fallbackType
+            });
         } else {
-          console.error('[Offscreen] ✗✗✗ INVALID WebM header! ✗✗✗');
-          console.error('[Offscreen] Expected: 1a 45 df a3');
-          console.error('[Offscreen] Got:', headerHex.substring(0, 11));
-          throw new Error('File corruption detected - invalid WebM header');
+            mediaRecorder = new MediaRecorder(combinedStream, {
+                mimeType: mimeType,
+                videoBitsPerSecond: 2500000
+            });
         }
         
-        console.log('[Offscreen] ✓ All validations passed');
-        console.log('[Offscreen] Converting to base64 for transfer...');
+        console.log('[Offscreen] MediaRecorder created:', mediaRecorder.mimeType);
         
-        // Convert to base64 for messaging
-        const reader = new FileReader();
+        // Step 5: Set up event handlers
+        recordedChunks = [];
         
-        reader.onloadend = () => {
-          console.log('[Offscreen] ✓ Base64 conversion complete');
-          console.log('[Offscreen] Sending blob to background...');
-          
-          chrome.runtime.sendMessage({
-            action: 'blobReady',
-            blobData: reader.result,
-            mimeType: videoBlob.type,
-            size: videoBlob.size
-          }).then(() => {
-            console.log('[Offscreen] ✓✓✓ Blob sent successfully to background ✓✓✓');
-            cleanup();
-          }).catch(error => {
-            console.error('[Offscreen] Failed to send blob:', error);
-            reportError('Failed to send recording: ' + error.message);
-            cleanup();
-          });
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data && event.data.size > 0) {
+                recordedChunks.push(event.data);
+                console.log('[Offscreen] Data chunk:', event.data.size, 'bytes', 
+                            'Total chunks:', recordedChunks.length);
+            }
         };
         
-        reader.onerror = () => {
-          throw new Error('FileReader failed: ' + reader.error?.message);
+        mediaRecorder.onstop = () => {
+            console.log('[Offscreen] MediaRecorder stopped');
+            console.log('[Offscreen] Total recorded:', recordedChunks.length, 'chunks');
+            
+            // Send data to background
+            chrome.runtime.sendMessage({
+                target: 'background',
+                action: 'recording-data',
+                data: recordedChunks
+            });
+            
+            // Clean up
+            cleanup();
         };
         
-        reader.readAsDataURL(videoBlob);
+        mediaRecorder.onerror = (error) => {
+            console.error('[Offscreen] MediaRecorder error:', error);
+            chrome.runtime.sendMessage({
+                target: 'background',
+                action: 'recording-error',
+                error: error.toString()
+            });
+            cleanup();
+        };
         
-      } catch (error) {
-        console.error('[Offscreen] ✗✗✗ Processing error:', error);
-        reportError('Recording processing failed: ' + error.message);
+        // Step 6: Start recording
+        // Request data every 1 second for better reliability
+        mediaRecorder.start(1000);
+        
+        console.log('[Offscreen] Recording started successfully');
+        console.log('[Offscreen] Recorder state:', mediaRecorder.state);
+        
+        // Update status display
+        const statusEl = document.getElementById('status');
+        if (statusEl) {
+            statusEl.textContent = 'Recording in progress...';
+        }
+        
+        return { success: true };
+        
+    } catch (error) {
+        console.error('[Offscreen] Error starting recording:', error);
         cleanup();
-      }
-    };
-
-    // Error handler
-    mediaRecorder.onerror = (event) => {
-      console.error('[Offscreen] MediaRecorder error:', event.error);
-      reportError('MediaRecorder error: ' + event.error.message);
-      cleanup();
-    };
-
-    // Start recording
-    mediaRecorder.start();
-    
-    console.log('[Offscreen] ==================== RECORDING STARTED ====================');
-    console.log('[Offscreen] ✓ Desktop video+audio captured');
-    console.log('[Offscreen] ✓ Microphone:', micStream ? 'Connected' : 'Not available');
-    console.log('[Offscreen] ✓ Audio monitoring: ENABLED (you can hear the tab)');
-    console.log('[Offscreen] ✓ MediaRecorder state:', mediaRecorder.state);
-    console.log('[Offscreen] ================================================================');
-
-  } catch (error) {
-    console.error('[Offscreen] Start recording error:', error);
-    cleanup();
-    throw error;
-  }
+        return { success: false, error: error.message };
+    }
 }
 
 function stopRecording() {
-  console.log('[Offscreen] ===== STOP RECORDING CALLED =====');
-  
-  if (!mediaRecorder) {
-    console.error('[Offscreen] No mediaRecorder exists');
-    reportError('Cannot stop: no active recorder');
-    return;
-  }
-  
-  if (mediaRecorder.state !== 'recording') {
-    console.warn('[Offscreen] Not recording, state:', mediaRecorder.state);
-    return;
-  }
-  
-  console.log('[Offscreen] Current state:', mediaRecorder.state);
-  console.log('[Offscreen] Chunks so far:', recordedChunks.length);
-  
-  try {
-    // Request final data
-    console.log('[Offscreen] Requesting final data...');
-    mediaRecorder.requestData();
-    
-    // Wait a moment for final chunk, then stop
-    setTimeout(() => {
-      if (mediaRecorder && mediaRecorder.state === 'recording') {
-        console.log('[Offscreen] Stopping MediaRecorder...');
-        mediaRecorder.stop();
-        console.log('[Offscreen] Stop() called - waiting for onstop event...');
-      }
-    }, 500);
-    
-  } catch (error) {
-    console.error('[Offscreen] Stop error:', error);
-    reportError('Failed to stop: ' + error.message);
-    cleanup();
-  }
+    try {
+        console.log('[Offscreen] Stopping recording...');
+        
+        if (!mediaRecorder) {
+            console.warn('[Offscreen] No MediaRecorder to stop');
+            return { success: false, error: 'No recording in progress' };
+        }
+        
+        if (mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+            console.log('[Offscreen] MediaRecorder.stop() called');
+        } else {
+            console.warn('[Offscreen] MediaRecorder not in recording state:', mediaRecorder.state);
+        }
+        
+        // Update status
+        const statusEl = document.getElementById('status');
+        if (statusEl) {
+            statusEl.textContent = 'Recording stopped, processing...';
+        }
+        
+        return { success: true };
+        
+    } catch (error) {
+        console.error('[Offscreen] Error stopping recording:', error);
+        return { success: false, error: error.message };
+    }
 }
 
 function cleanup() {
-  console.log('[Offscreen] ===== CLEANUP =====');
-  
-  if (desktopStream) {
-    desktopStream.getTracks().forEach(track => {
-      track.stop();
-      console.log('[Offscreen] Stopped track:', track.kind);
-    });
-    desktopStream = null;
-  }
-  
-  if (micStream) {
-    micStream.getTracks().forEach(track => {
-      track.stop();
-      console.log('[Offscreen] Stopped mic track');
-    });
-    micStream = null;
-  }
-  
-  if (audioContext && audioContext.state !== 'closed') {
-    audioContext.close();
-    audioContext = null;
-    console.log('[Offscreen] Audio context closed');
-  }
-  
-  mediaRecorder = null;
-  recordedChunks = [];
-  
-  console.log('[Offscreen] Cleanup complete');
+    console.log('[Offscreen] Cleaning up resources...');
+    
+    // Stop all tracks
+    if (combinedStream) {
+        combinedStream.getTracks().forEach(track => {
+            track.stop();
+            console.log('[Offscreen] Stopped track:', track.kind);
+        });
+        combinedStream = null;
+    }
+    
+    // Close audio context
+    if (audioContext) {
+        audioContext.close().catch(err => {
+            console.warn('[Offscreen] Error closing audio context:', err);
+        });
+        audioContext = null;
+    }
+    
+    audioDestination = null;
+    mediaRecorder = null;
+    
+    console.log('[Offscreen] Cleanup complete');
 }
 
-function reportError(errorMessage) {
-  console.error('[Offscreen] Reporting error to background:', errorMessage);
-  
-  try {
-    chrome.runtime.sendMessage({
-      action: 'recordingError',
-      error: errorMessage
-    }).catch(err => {
-      console.error('[Offscreen] Could not report error:', err);
-    });
-  } catch (e) {
-    console.error('[Offscreen] Error reporting failed:', e);
-  }
-}
+// ==================== Message Handling ====================
 
-// Cleanup on page unload
-window.addEventListener('beforeunload', () => {
-  console.log('[Offscreen] Page unloading...');
-  cleanup();
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log('[Offscreen] Message received:', message);
+    
+    if (message.target !== 'offscreen') {
+        return false;
+    }
+    
+    if (message.action === 'start-recording') {
+        startRecording(message.streamId)
+            .then(result => sendResponse(result))
+            .catch(error => sendResponse({ success: false, error: error.message }));
+        return true; // Will respond asynchronously
+    }
+    
+    if (message.action === 'stop-recording') {
+        const result = stopRecording();
+        sendResponse(result);
+        return false;
+    }
+    
+    return false;
 });
 
-console.log('[Offscreen] Ready and waiting for recording commands');
+console.log('[Offscreen] Ready to receive commands');

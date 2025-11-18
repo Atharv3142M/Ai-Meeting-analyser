@@ -1,39 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>POAi Offscreen Recorder</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 20px;
-            font-family: monospace;
-            background: #1a1a1a;
-            color: #00ff00;
-        }
-        .status {
-            padding: 10px;
-            border: 1px solid #00ff00;
-            border-radius: 4px;
-            margin-bottom: 10px;
-        }
-        .log {
-            font-size: 12px;
-            line-height: 1.4;
-        }
-    </style>
 </head>
 <body>
-    <div class="status">
-        <h2>POAi v2.0 Offscreen Recorder</h2>
-        <p class="log">🎥 Waiting for recording commands...</p>
-        <p class="log">📡 This hidden page handles video/audio capture</p>
-        <p class="log">🔊 Desktop audio + microphone mixing enabled</p>
-        <p class="log">✅ Ready to record</p>
-    </div>
-    
-    <!-- Recording script loaded here -->
+    <h1>POAi Offscreen Recording Context</h1>
+    <p>This page runs in the background to handle media recording.</p>
+    <p id="status">Waiting...</p>
     <script src="offscreen.js"></script>
 </body>
 </html>

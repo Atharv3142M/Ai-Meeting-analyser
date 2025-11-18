@@ -1,15 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "POAi v2.0 - Meeting Recorder",
-  "version": "2.0.4",
-  "description": "Record meetings with AI-powered analysis. 100% local and private.",
+  "name": "POAi - Meeting Recorder v2.0",
+  "version": "2.0.0",
+  "description": "Record, transcribe, and analyze meetings with AI - 100% local processing",
   "permissions": [
     "desktopCapture",
-    "offscreen",
-    "notifications",
-    "tabs",
+    "tabCapture",
+    "activeTab",
     "storage",
-    "activeTab"
+    "offscreen"
   ],
   "host_permissions": [
     "http://127.0.0.1:5000/*",
@@ -25,18 +24,14 @@
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
-    },
-    "default_title": "POAi v2.0 - Record Meeting"
+    }
   },
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "web_accessible_resources": [
-    {
-      "resources": ["offscreen.html"],
-      "matches": ["<all_urls>"]
-    }
-  ]
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
 }

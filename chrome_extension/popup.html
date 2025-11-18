@@ -1,301 +1,201 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>POAi v2.0</title>
     <style>
-        * {
+        body {
+            width: 360px;
+            min-height: 200px;
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            width: 400px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
         }
         
         .container {
-            background: white;
-            min-height: 500px;
-            display: flex;
-            flex-direction: column;
+            padding: 20px;
         }
         
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 24px 20px;
             text-align: center;
+            margin-bottom: 24px;
         }
         
         .logo {
-            width: 48px;
-            height: 48px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 12px;
-            font-size: 24px;
-            font-weight: bold;
-        }
-        
-        .header h1 {
-            font-size: 20px;
-            font-weight: 700;
-            margin-bottom: 4px;
-        }
-        
-        .header p {
-            font-size: 12px;
-            opacity: 0.9;
-        }
-        
-        .content {
-            padding: 24px 20px;
-            flex: 1;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        label {
-            display: block;
+            font-size: 48px;
             margin-bottom: 8px;
+        }
+        
+        h1 {
+            margin: 0;
+            font-size: 24px;
             font-weight: 600;
-            color: #2d3748;
-            font-size: 14px;
         }
         
-        input[type="text"] {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: all 0.2s;
-        }
-        
-        input[type="text"]:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-        
-        input[type="text"]:disabled {
-            background: #f7fafc;
-            color: #a0aec0;
-        }
-        
-        .help-text {
+        .version {
             font-size: 12px;
-            color: #718096;
-            margin-top: 6px;
+            opacity: 0.8;
+            margin-top: 4px;
         }
         
-        .btn {
-            width: 100%;
-            padding: 14px 20px;
-            border: none;
-            border-radius: 8px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            transition: all 0.2s;
-            margin-bottom: 12px;
-        }
-        
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .btn:not(:disabled):hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        
-        .btn-danger {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-        }
-        
-        .btn-secondary {
-            background: white;
-            color: #667eea;
-            border: 2px solid #667eea;
-        }
-        
-        .btn-secondary:not(:disabled):hover {
-            background: #667eea;
-            color: white;
-        }
-        
-        .recording-status {
-            text-align: center;
+        .status {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
             padding: 16px;
-            background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
-            border-radius: 8px;
             margin-bottom: 16px;
-            display: none;
-            animation: pulse 2s ease-in-out infinite;
+            text-align: center;
+        }
+        
+        .status-text {
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.inactive {
+            background: #6b7280;
+            animation: none;
         }
         
         @keyframes pulse {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0.8; }
-        }
-        
-        .recording-status.active {
-            display: block;
-        }
-        
-        .recording-dot {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            background: #e74c3c;
-            border-radius: 50%;
-            margin-right: 8px;
-            animation: blink 1s infinite;
-        }
-        
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
-        
-        .status-text {
-            font-weight: 700;
-            font-size: 14px;
-            color: #2d3748;
+            50% { opacity: 0.5; }
         }
         
         .timer {
-            font-family: 'Courier New', monospace;
-            font-size: 18px;
+            font-size: 32px;
             font-weight: 700;
-            color: #e74c3c;
-            margin-top: 4px;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 2px;
+            margin: 12px 0;
         }
         
-        .warning {
-            font-size: 11px;
-            color: #d63031;
-            margin-top: 8px;
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
         
-        .divider {
-            height: 1px;
-            background: linear-gradient(to right, transparent, #e2e8f0, transparent);
-            margin: 16px 0;
+        button {
+            padding: 14px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
         
-        .footer {
-            text-align: center;
-            padding: 16px 20px;
-            background: #f7fafc;
-            border-top: 1px solid #e2e8f0;
-            font-size: 11px;
-            color: #718096;
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
         }
-
-        .error-message {
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .btn-start {
+            background: #10b981;
+            color: white;
+        }
+        
+        .btn-stop {
+            background: #ef4444;
+            color: white;
+        }
+        
+        .btn-dashboard {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .error {
             background: #fee;
-            color: #c33;
+            color: #c00;
             padding: 12px;
             border-radius: 8px;
-            margin-bottom: 16px;
+            margin-top: 12px;
             font-size: 13px;
-            display: none;
+            border: 1px solid #fcc;
         }
-
-        .error-message.show {
-            display: block;
-        }
-
-        .info-box {
-            background: #e6f7ff;
-            border-left: 4px solid #1890ff;
-            padding: 12px;
-            border-radius: 4px;
-            margin-bottom: 16px;
+        
+        .info {
             font-size: 12px;
-            color: #003a8c;
+            text-align: center;
+            margin-top: 16px;
+            opacity: 0.8;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <div class="logo">P</div>
-            <h1>POAi v2.0</h1>
-            <p>Meeting Recorder with AI Analysis</p>
+            <div class="logo">🎥</div>
+            <h1>POAi Recorder</h1>
+            <div class="version">v2.0 Production</div>
         </div>
-
-        <div class="content">
-            <div class="error-message" id="errorMessage"></div>
-
-            <div class="info-box">
-                <strong>📌 Important:</strong> A "Share your screen" dialog will appear. Select the tab/window you want to record.
+        
+        <div class="status">
+            <div class="status-text">Recording Status</div>
+            <div class="status-indicator">
+                <span class="status-dot inactive" id="statusDot"></span>
+                <span id="statusText">Ready</span>
             </div>
-
-            <div class="form-group">
-                <label for="recordingName">Recording Name</label>
-                <input type="text" 
-                       id="recordingName" 
-                       placeholder="e.g., Weekly Team Sync"
-                       maxlength="100"
-                       autocomplete="off">
-                <p class="help-text">Enter a descriptive name for this recording</p>
-            </div>
-
-            <div class="recording-status" id="recordingStatus">
-                <div>
-                    <span class="recording-dot"></span>
-                    <span class="status-text">RECORDING IN PROGRESS</span>
-                </div>
-                <div class="timer" id="recordingTime">00:00</div>
-                <div class="warning">⚠️ Wait at least 10 seconds before stopping</div>
-            </div>
-
-            <button class="btn btn-primary" id="startBtn">
-                <span>▶️</span>
-                Start Recording
+            <div class="timer" id="timer">00:00</div>
+        </div>
+        
+        <div class="controls">
+            <button id="startBtn" class="btn-start">
+                <span>🔴</span>
+                <span>Start Recording</span>
             </button>
-
-            <button class="btn btn-danger" id="stopBtn" style="display: none;">
+            
+            <button id="stopBtn" class="btn-stop" disabled>
                 <span>⏹️</span>
-                Finish Recording
+                <span>Stop Recording</span>
             </button>
-
-            <div class="divider" id="divider"></div>
-
-            <button class="btn btn-secondary" id="dashboardBtn">
+            
+            <button id="dashboardBtn" class="btn-dashboard">
                 <span>📊</span>
-                Open Dashboard
+                <span>Open Dashboard</span>
             </button>
         </div>
-
-        <div class="footer">
-            🔒 100% Local & Private Processing<br>
-            Server: http://127.0.0.1:5000
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div class="info">
+            100% Local & Private Processing
         </div>
     </div>
+    
     <script src="popup.js"></script>
 </body>
 </html>
