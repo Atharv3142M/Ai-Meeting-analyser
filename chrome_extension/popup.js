@@ -6,65 +6,25 @@ const recordingIndicator = document.querySelector("#recordingIndicator");
 const recordingStatus = document.querySelector("#recordingStatus");
 const dashboardLink = document.querySelector("#dashboardLink");
 
-const injectCamera = async () => {
-  // inject the content script into the current page
-  const tab = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab) return;
-
-  const tabId = tab[0].id;
-  console.log("inject into tab", tabId);
-  await chrome.scripting.executeScript({
-    // content.js is the file that will be injected
-    files: ["content.js"],
-    target: { tabId },
-  });
+// Check state on open
+const init = async () => {
+  const { recording, type } = await chrome.storage.local.get(["recording", "type"]);
+  updateUI(recording, type);
 };
 
-const removeCamera = async () => {
-  // inject the content script into the current page
-  const tab = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab) return;
-
-  const tabId = tab[0].id;
-  console.log("inject into tab", tabId);
-  await chrome.scripting.executeScript({
-    // content.js is the file that will be injected
-    func: () => {
-      const camera = document.querySelector("#rusty-camera");
-      if (!camera) return;
-      document.querySelector("#rusty-camera").style.display = "none";
-    },
-    target: { tabId },
-  });
-};
-
-// check chrome storage if recording is on
-const checkRecording = async () => {
-  const recording = await chrome.storage.local.get(["recording", "type"]);
-  const recordingStatus = recording.recording || false;
-  const recordingType = recording.type || "";
-  console.log("recording status", recordingStatus, recordingType);
-  return [recordingStatus, recordingType];
-};
-
-// Open dashboard
-const openDashboard = () => {
-  chrome.tabs.create({ url: chrome.runtime.getURL("dashboard.html") });
-  window.close();
-};
-
-const updateUI = (isRecording, recordingType) => {
+const updateUI = (isRecording, type) => {
   if (isRecording) {
     recordingIndicator.classList.add("active");
-    recordTab.classList.add("stop");
-    recordScreen.classList.add("stop");
     
-    if (recordingType === "tab") {
+    // If recording, buttons become "Stop" buttons
+    if (type === "tab") {
       tabText.textContent = "Stop Recording";
-      recordingStatus.textContent = "Recording Tab...";
+      screenText.textContent = "Record Screen"; // Disable other button visual if needed
+      recordTab.classList.add("stop");
     } else {
       screenText.textContent = "Stop Recording";
-      recordingStatus.textContent = "Recording Screen...";
+      tabText.textContent = "Record Tab";
+      recordScreen.classList.add("stop");
     }
   } else {
     recordingIndicator.classList.remove("active");
@@ -75,49 +35,32 @@ const updateUI = (isRecording, recordingType) => {
   }
 };
 
-const init = async () => {
-  const recordingState = await checkRecording();
+const handleButtonClick = async (clickedType) => {
+  const { recording } = await chrome.storage.local.get(["recording"]);
 
-  console.log("recording state", recordingState);
-
-  updateUI(recordingState[0], recordingState[1]);
-
-  const updateRecording = async (type) => {
-    console.log("start recording", type);
-
-    const recordingState = await checkRecording();
-
-    if (recordingState[0] === true) {
-      // stop recording
-      chrome.runtime.sendMessage({ type: "stop-recording" });
-      removeCamera();
-    } else {
-      // send message to service worker to start recording
-      chrome.runtime.sendMessage({
-        type: "start-recording",
-        recordingType: type,
-      });
-      injectCamera();
-    }
-
-    // close popup
-    window.close();
-  };
-
-  recordTab.addEventListener("click", async () => {
-    console.log("updateRecording tab clicked");
-    updateRecording("tab");
-  });
-
-  recordScreen.addEventListener("click", async () => {
-    console.log("updateRecording screen clicked");
-    updateRecording("screen");
-  });
-
-  dashboardLink.addEventListener("click", (e) => {
-    e.preventDefault();
-    openDashboard();
-  });
+  if (recording) {
+    // If currently recording, STOP it
+    chrome.runtime.sendMessage({ type: "stop-recording" });
+    window.close(); // Close popup
+  } else {
+    // If not recording, START it
+    chrome.runtime.sendMessage({ 
+      type: "start-recording", 
+      recordingType: clickedType 
+    });
+    window.close(); // Close popup
+  }
 };
 
+// Event Listeners
+recordTab.addEventListener("click", () => handleButtonClick("tab"));
+recordScreen.addEventListener("click", () => handleButtonClick("screen"));
+
+// *** NEW: Open Python Dashboard ***
+dashboardLink.addEventListener("click", (e) => {
+  e.preventDefault();
+  chrome.tabs.create({ url: "http://127.0.0.1:5000" });
+});
+
+// Run init
 init();
