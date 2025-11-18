@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
-  "name": "POAi v2.0 - Productivity Optimization Assistant AI",
-  "version": "2.0.2",
+  "name": "POAi v2.0 - Meeting Recorder",
+  "version": "2.0.3",
   "description": "Record meetings with AI-powered analysis. 100% local and private.",
   "permissions": [
-    "desktopCapture",
+    "tabCapture",
     "offscreen",
     "notifications",
     "tabs",

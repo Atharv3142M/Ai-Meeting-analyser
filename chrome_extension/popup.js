@@ -1,6 +1,5 @@
 /**
  * POAi v2.0 - Popup UI
- * Fixed state management and error handling
  */
 
 const startBtn = document.getElementById('startBtn');
@@ -15,20 +14,18 @@ const errorMessage = document.getElementById('errorMessage');
 let recordingInterval;
 let seconds = 0;
 
-console.log('[Popup] POAi v2.0 popup loaded');
-
-// ==================== Event Listeners ====================
+console.log('[Popup] Loaded');
 
 startBtn.addEventListener('click', async () => {
   const name = recordingName.value.trim();
   
   if (!name) {
-    showError('Please enter a name for the recording');
+    showError('Please enter a recording name');
     recordingName.focus();
     return;
   }
 
-  console.log('[Popup] Starting recording:', name);
+  console.log('[Popup] Starting:', name);
   startBtn.disabled = true;
   startBtn.textContent = 'Starting...';
   hideError();
@@ -40,11 +37,11 @@ startBtn.addEventListener('click', async () => {
     });
     
     if (response && response.success) {
-      console.log('[Popup] Recording started successfully');
+      console.log('[Popup] Started successfully');
       updateUIToRecording(name, response.startTime);
       setTimeout(() => window.close(), 800);
     } else {
-      console.error('[Popup] Failed to start:', response?.error);
+      console.error('[Popup] Failed:', response?.error);
       showError(response?.error || 'Failed to start recording');
       resetStartButton();
     }
@@ -56,7 +53,7 @@ startBtn.addEventListener('click', async () => {
 });
 
 stopBtn.addEventListener('click', async () => {
-  console.log('[Popup] Stop button clicked');
+  console.log('[Popup] Stop clicked');
   
   stopBtn.disabled = true;
   stopBtn.textContent = 'Stopping...';
@@ -66,8 +63,8 @@ stopBtn.addEventListener('click', async () => {
     const response = await chrome.runtime.sendMessage({ action: 'stopRecording' });
     
     if (response && response.success) {
-      console.log('[Popup] Recording stopped successfully');
-      showError('Recording stopped! File will be uploaded shortly. Check the dashboard in a moment.');
+      console.log('[Popup] Stopped successfully');
+      showError('Recording stopped! Uploading to server...');
       setTimeout(() => {
         updateUIToStopped();
       }, 2000);
@@ -86,15 +83,10 @@ stopBtn.addEventListener('click', async () => {
 });
 
 dashboardBtn.addEventListener('click', () => {
-  console.log('[Popup] Opening dashboard');
   chrome.tabs.create({ url: 'http://127.0.0.1:5000' });
 });
 
-// ==================== UI Functions ====================
-
 function updateUIToRecording(name, startTime) {
-  console.log('[Popup] Updating UI to recording state');
-  
   recordingName.value = name;
   recordingName.disabled = true;
   
@@ -109,9 +101,7 @@ function updateUIToRecording(name, startTime) {
   seconds = Math.floor((Date.now() - startTime) / 1000);
   updateTimer();
   
-  if (recordingInterval) {
-    clearInterval(recordingInterval);
-  }
+  if (recordingInterval) clearInterval(recordingInterval);
   
   recordingInterval = setInterval(() => {
     seconds++;
@@ -120,8 +110,6 @@ function updateUIToRecording(name, startTime) {
 }
 
 function updateUIToStopped() {
-  console.log('[Popup] Updating UI to stopped state');
-  
   if (recordingInterval) {
     clearInterval(recordingInterval);
     recordingInterval = null;
@@ -168,28 +156,19 @@ function hideError() {
   errorMessage.classList.remove('show');
 }
 
-// ==================== State Restoration ====================
-
 async function restoreRecordingState() {
-  console.log('[Popup] Restoring state...');
-  
   try {
     const response = await chrome.runtime.sendMessage({ action: 'getRecordingStatus' });
     
-    console.log('[Popup] State response:', response);
-    
     if (response && response.isRecording) {
-      console.log('[Popup] Recording in progress, showing recording UI');
       const { name, startTime } = response.recordingData || {};
       
       if (name && startTime) {
         updateUIToRecording(name, startTime);
       } else {
-        console.warn('[Popup] Invalid recording data, resetting UI');
         updateUIToStopped();
       }
     } else {
-      console.log('[Popup] No active recording, showing start UI');
       updateUIToStopped();
     }
   } catch (error) {
@@ -198,10 +177,7 @@ async function restoreRecordingState() {
   }
 }
 
-// ==================== Initialization ====================
-
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('[Popup] DOM loaded, restoring state');
   restoreRecordingState();
   
   if (!recordingName.disabled) {
