@@ -1,113 +1,123 @@
-// POAi v2.0 - Popup Script
-console.log('[Popup] Initializing...');
+const recordTab = document.querySelector("#tab");
+const recordScreen = document.querySelector("#screen");
+const tabText = document.querySelector("#tabText");
+const screenText = document.querySelector("#screenText");
+const recordingIndicator = document.querySelector("#recordingIndicator");
+const recordingStatus = document.querySelector("#recordingStatus");
+const dashboardLink = document.querySelector("#dashboardLink");
 
-const startBtn = document.getElementById('startBtn');
-const stopBtn = document.getElementById('stopBtn');
-const dashboardBtn = document.getElementById('dashboardBtn');
-const statusText = document.getElementById('statusText');
-const statusDot = document.getElementById('statusDot');
-const timerDisplay = document.getElementById('timer');
-const errorDiv = document.getElementById('error');
+const injectCamera = async () => {
+  // inject the content script into the current page
+  const tab = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab) return;
 
-let timerInterval = null;
+  const tabId = tab[0].id;
+  console.log("inject into tab", tabId);
+  await chrome.scripting.executeScript({
+    // content.js is the file that will be injected
+    files: ["content.js"],
+    target: { tabId },
+  });
+};
 
-// Update UI based on recording state
-async function updateUI() {
-    try {
-        const response = await chrome.runtime.sendMessage({ action: 'getState' });
-        const { isRecording, startTime } = response || {};
-        
-        if (isRecording) {
-            startBtn.disabled = true;
-            stopBtn.disabled = false;
-            statusText.textContent = 'Recording...';
-            statusDot.classList.remove('inactive');
-            
-            // Start timer
-            if (!timerInterval && startTime) {
-                timerInterval = setInterval(() => {
-                    const elapsed = Math.floor((Date.now() - startTime) / 1000);
-                    const mins = Math.floor(elapsed / 60);
-                    const secs = elapsed % 60;
-                    timerDisplay.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-                }, 1000);
-            }
-        } else {
-            startBtn.disabled = false;
-            stopBtn.disabled = true;
-            statusText.textContent = 'Ready';
-            statusDot.classList.add('inactive');
-            timerDisplay.textContent = '00:00';
-            
-            if (timerInterval) {
-                clearInterval(timerInterval);
-                timerInterval = null;
-            }
-        }
-    } catch (error) {
-        console.error('[Popup] Error updating UI:', error);
-    }
-}
+const removeCamera = async () => {
+  // inject the content script into the current page
+  const tab = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab) return;
 
-// Show error message
-function showError(message) {
-    errorDiv.textContent = message;
-    errorDiv.style.display = 'block';
-    setTimeout(() => {
-        errorDiv.style.display = 'none';
-    }, 5000);
-}
+  const tabId = tab[0].id;
+  console.log("inject into tab", tabId);
+  await chrome.scripting.executeScript({
+    // content.js is the file that will be injected
+    func: () => {
+      const camera = document.querySelector("#rusty-camera");
+      if (!camera) return;
+      document.querySelector("#rusty-camera").style.display = "none";
+    },
+    target: { tabId },
+  });
+};
 
-// Start recording
-startBtn.addEventListener('click', async () => {
-    try {
-        console.log('[Popup] Start button clicked');
-        errorDiv.style.display = 'none';
-        
-        const response = await chrome.runtime.sendMessage({ action: 'startRecording' });
-        
-        if (response && response.success) {
-            console.log('[Popup] Recording started successfully');
-            await updateUI();
-        } else {
-            const errorMsg = response?.error || 'Failed to start recording';
-            console.error('[Popup] Start failed:', errorMsg);
-            showError(errorMsg);
-        }
-    } catch (error) {
-        console.error('[Popup] Error starting recording:', error);
-        showError('Error: ' + error.message);
-    }
-});
-
-// Stop recording
-stopBtn.addEventListener('click', async () => {
-    try {
-        console.log('[Popup] Stop button clicked');
-        
-        const response = await chrome.runtime.sendMessage({ action: 'stopRecording' });
-        
-        if (response && response.success) {
-            console.log('[Popup] Recording stopped successfully');
-            await updateUI();
-        } else {
-            const errorMsg = response?.error || 'Failed to stop recording';
-            console.error('[Popup] Stop failed:', errorMsg);
-            showError(errorMsg);
-        }
-    } catch (error) {
-        console.error('[Popup] Error stopping recording:', error);
-        showError('Error: ' + error.message);
-    }
-});
+// check chrome storage if recording is on
+const checkRecording = async () => {
+  const recording = await chrome.storage.local.get(["recording", "type"]);
+  const recordingStatus = recording.recording || false;
+  const recordingType = recording.type || "";
+  console.log("recording status", recordingStatus, recordingType);
+  return [recordingStatus, recordingType];
+};
 
 // Open dashboard
-dashboardBtn.addEventListener('click', () => {
-    chrome.tabs.create({ url: 'http://127.0.0.1:5000' });
-});
+const openDashboard = () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("dashboard.html") });
+  window.close();
+};
 
-// Initialize UI on popup open
-updateUI();
+const updateUI = (isRecording, recordingType) => {
+  if (isRecording) {
+    recordingIndicator.classList.add("active");
+    recordTab.classList.add("stop");
+    recordScreen.classList.add("stop");
+    
+    if (recordingType === "tab") {
+      tabText.textContent = "Stop Recording";
+      recordingStatus.textContent = "Recording Tab...";
+    } else {
+      screenText.textContent = "Stop Recording";
+      recordingStatus.textContent = "Recording Screen...";
+    }
+  } else {
+    recordingIndicator.classList.remove("active");
+    recordTab.classList.remove("stop");
+    recordScreen.classList.remove("stop");
+    tabText.textContent = "Record Tab";
+    screenText.textContent = "Record Screen";
+  }
+};
 
-// Update UI every second while popup is open
-setInterval(updateUI, 1000);
+const init = async () => {
+  const recordingState = await checkRecording();
+
+  console.log("recording state", recordingState);
+
+  updateUI(recordingState[0], recordingState[1]);
+
+  const updateRecording = async (type) => {
+    console.log("start recording", type);
+
+    const recordingState = await checkRecording();
+
+    if (recordingState[0] === true) {
+      // stop recording
+      chrome.runtime.sendMessage({ type: "stop-recording" });
+      removeCamera();
+    } else {
+      // send message to service worker to start recording
+      chrome.runtime.sendMessage({
+        type: "start-recording",
+        recordingType: type,
+      });
+      injectCamera();
+    }
+
+    // close popup
+    window.close();
+  };
+
+  recordTab.addEventListener("click", async () => {
+    console.log("updateRecording tab clicked");
+    updateRecording("tab");
+  });
+
+  recordScreen.addEventListener("click", async () => {
+    console.log("updateRecording screen clicked");
+    updateRecording("screen");
+  });
+
+  dashboardLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    openDashboard();
+  });
+};
+
+init();

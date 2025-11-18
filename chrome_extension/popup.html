@@ -1,201 +1,200 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <style>
-        body {
-            width: 360px;
-            min-height: 200px;
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        
-        .container {
-            padding: 20px;
-        }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 24px;
-        }
-        
-        .logo {
-            font-size: 48px;
-            margin-bottom: 8px;
-        }
-        
-        h1 {
-            margin: 0;
-            font-size: 24px;
-            font-weight: 600;
-        }
-        
-        .version {
-            font-size: 12px;
-            opacity: 0.8;
-            margin-top: 4px;
-        }
-        
-        .status {
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(10px);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 16px;
-            text-align: center;
-        }
-        
-        .status-text {
-            font-size: 14px;
-            margin-bottom: 8px;
-        }
-        
-        .status-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            font-weight: 600;
-        }
-        
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #10b981;
-            animation: pulse 2s infinite;
-        }
-        
-        .status-dot.inactive {
-            background: #6b7280;
-            animation: none;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        
-        .timer {
-            font-size: 32px;
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
-            letter-spacing: 2px;
-            margin: 12px 0;
-        }
-        
-        .controls {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        
-        button {
-            padding: 14px 24px;
-            border: none;
-            border-radius: 10px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-        }
-        
-        button:active {
-            transform: translateY(0);
-        }
-        
-        .btn-start {
-            background: #10b981;
-            color: white;
-        }
-        
-        .btn-stop {
-            background: #ef4444;
-            color: white;
-        }
-        
-        .btn-dashboard {
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(10px);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-        
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .error {
-            background: #fee;
-            color: #c00;
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: 12px;
-            font-size: 13px;
-            border: 1px solid #fcc;
-        }
-        
-        .info {
-            font-size: 12px;
-            text-align: center;
-            margin-top: 16px;
-            opacity: 0.8;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rusty Recorder</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 350px;
+      min-height: 400px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      padding: 0;
+    }
+
+    .container {
+      padding: 30px 20px;
+      color: white;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .header p {
+      font-size: 13px;
+      opacity: 0.9;
+    }
+
+    .recording-indicator {
+      display: none;
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .recording-indicator.active {
+      display: flex;
+    }
+
+    .pulse {
+      width: 12px;
+      height: 12px;
+      background: #ff4757;
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .recording-status {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .btn-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .record-btn {
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(10px);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 12px;
+      padding: 18px 24px;
+      color: white;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .record-btn::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
+
+    .record-btn:hover::before {
+      width: 300px;
+      height: 300px;
+    }
+
+    .record-btn:hover {
+      background: rgba(255, 255, 255, 0.35);
+      border-color: rgba(255, 255, 255, 0.5);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+    }
+
+    .record-btn:active {
+      transform: translateY(0);
+    }
+
+    .record-btn.stop {
+      background: #ff4757;
+      border-color: #ff4757;
+    }
+
+    .record-btn.stop:hover {
+      background: #ff3838;
+      border-color: #ff3838;
+    }
+
+    .btn-icon {
+      font-size: 18px;
+    }
+
+    .dashboard-link {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .dashboard-link a {
+      color: white;
+      text-decoration: none;
+      font-size: 14px;
+      opacity: 0.9;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: opacity 0.3s;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .dashboard-link a:hover {
+      opacity: 1;
+      background: rgba(255, 255, 255, 0.2);
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="logo">🎥</div>
-            <h1>POAi Recorder</h1>
-            <div class="version">v2.0 Production</div>
-        </div>
-        
-        <div class="status">
-            <div class="status-text">Recording Status</div>
-            <div class="status-indicator">
-                <span class="status-dot inactive" id="statusDot"></span>
-                <span id="statusText">Ready</span>
-            </div>
-            <div class="timer" id="timer">00:00</div>
-        </div>
-        
-        <div class="controls">
-            <button id="startBtn" class="btn-start">
-                <span>🔴</span>
-                <span>Start Recording</span>
-            </button>
-            
-            <button id="stopBtn" class="btn-stop" disabled>
-                <span>⏹️</span>
-                <span>Stop Recording</span>
-            </button>
-            
-            <button id="dashboardBtn" class="btn-dashboard">
-                <span>📊</span>
-                <span>Open Dashboard</span>
-            </button>
-        </div>
-        
-        <div id="error" class="error" style="display: none;"></div>
-        
-        <div class="info">
-            100% Local & Private Processing
-        </div>
+  <div class="container">
+    <div class="header">
+      <h1>🎬 Rusty Recorder</h1>
+      <p>Record your screen with ease</p>
     </div>
-    
-    <script src="popup.js"></script>
+
+    <div class="recording-indicator" id="recordingIndicator">
+      <div class="pulse"></div>
+      <span class="recording-status" id="recordingStatus">Recording in progress...</span>
+    </div>
+
+    <div class="btn-container">
+      <button class="record-btn" id="tab">
+        <span class="btn-icon">📹</span>
+        <span id="tabText">Record Tab</span>
+      </button>
+      <button class="record-btn" id="screen">
+        <span class="btn-icon">🖥️</span>
+        <span id="screenText">Record Screen</span>
+      </button>
+    </div>
+
+    <div class="dashboard-link">
+      <a href="#" id="dashboardLink">📊 View Dashboard</a>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
 </body>
 </html>

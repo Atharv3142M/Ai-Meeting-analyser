@@ -1,37 +1,38 @@
 {
-  "manifest_version": 3,
-  "name": "POAi - Meeting Recorder v2.0",
+  "name": "POAi Recorder",
+  "description": "Records screen and mic for POAi analysis",
   "version": "2.0.0",
-  "description": "Record, transcribe, and analyze meetings with AI - 100% local processing",
-  "permissions": [
-    "desktopCapture",
-    "tabCapture",
-    "activeTab",
-    "storage",
-    "offscreen"
-  ],
+  "manifest_version": 3,
+  "minimum_chrome_version": "116",
+  "action": {
+    "default_icon": {
+      "16": "icons/not-recording.png",
+      "32": "icons/not-recording.png"
+    },
+    "default_popup": "popup.html"
+  },
   "host_permissions": [
-    "http://127.0.0.1:5000/*",
-    "http://localhost:5000/*"
+    "http://127.0.0.1:5000/*", 
+    "http://localhost:5000/*",
+    "https://*/*", 
+    "http://*/*"
   ],
   "background": {
-    "service_worker": "background.js",
-    "type": "module"
+    "service_worker": "service-worker.js"
   },
-  "action": {
-    "default_popup": "popup.html",
-    "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
+  "permissions": [
+    "tabCapture",
+    "offscreen",
+    "scripting",
+    "storage",
+    "desktopCapture",
+    "tabs",
+    "notifications"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["camera.html", "camera.js", "video.html", "video.js", "dashboard.html"],
+      "matches": ["https://*/*", "http://*/*"]
     }
-  },
-  "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
-  },
-  "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'"
-  }
+  ]
 }
