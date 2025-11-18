@@ -16,7 +16,7 @@ const fetchBlob = async (url) => {
   return base64;
 };
 
-// listen for messages from the service worker - start recording  - stop recording
+// listen for messages from the service worker
 chrome.runtime.onMessage.addListener(function (request, sender) {
   console.log("message received", request, sender);
 
@@ -47,17 +47,16 @@ const stopRecording = () => {
 };
 
 const startRecording = async (focusedTabId) => {
-  //...
   // use desktopCapture to get the screen stream
   chrome.desktopCapture.chooseDesktopMedia(
-    ["screen", "window"],
+    ["screen", "window", "tab", "audio"], // Explicitly ask for audio
     async function (streamId) {
-      if (streamId === null) {
-        return;
+      if (!streamId) {
+        return; // User cancelled
       }
-      // have stream id
       console.log("stream id from desktop capture", streamId);
 
+      // 1. Get the System Audio & Video
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           mandatory: {
@@ -73,61 +72,80 @@ const startRecording = async (focusedTabId) => {
         },
       });
 
-      console.log("stream from desktop capture", stream);
-
-      // get the microphone stream
-      const microphone = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: false },
-      });
-
-      // check that the microphone stream has audio tracks
-      if (microphone.getAudioTracks().length !== 0) {
-        const combinedStream = new MediaStream([
-          stream.getVideoTracks()[0],
-          microphone.getAudioTracks()[0],
-        ]);
-
-        console.log("combined stream", combinedStream);
-
-        recorder = new MediaRecorder(combinedStream, {
-          mimeType: "video/webm",
-        });
-
-        // listen for data
-        recorder.ondataavailable = (event) => {
-          console.log("data available", event);
-          data.push(event.data);
-        };
-
-        // listen for when recording stops
-        recorder.onstop = async () => {
-          console.log("recording stopped");
-          // send the data to the service worker
-          const blobFile = new Blob(data, { type: "video/webm" });
-          const url = URL.createObjectURL(blobFile);
-          const base64 = await fetchBlob(url);
-
-          // send message to service worker to open tab with both URL and base64
-          console.log("send message to open tab", base64);
-          chrome.runtime.sendMessage({ 
-            type: "open-tab", 
-            url: url,
-            base64: base64 
+      // 2. Get the Microphone Audio
+      // We use a separate getUserMedia call for this
+      let microphoneStream;
+      try {
+          microphoneStream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: false },
           });
-
-          data = [];
-        };
-
-        // start recording
-        recorder.start();
-
-        // set focus back to the previous tab
-        if (focusedTabId) {
-          chrome.tabs.update(focusedTabId, { active: true });
-        }
+      } catch (e) {
+          console.warn("Microphone access denied or unavailable", e);
       }
 
-      return;
+      // 3. Combine them
+      let combinedStream;
+      
+      if (microphoneStream && microphoneStream.getAudioTracks().length > 0) {
+        const audioContext = new AudioContext();
+        const destination = audioContext.createMediaStreamDestination();
+
+        // Add system audio if available
+        if (stream.getAudioTracks().length > 0) {
+            const systemSource = audioContext.createMediaStreamSource(stream);
+            systemSource.connect(destination);
+        }
+
+        // Add mic audio
+        const micSource = audioContext.createMediaStreamSource(microphoneStream);
+        micSource.connect(destination);
+
+        combinedStream = new MediaStream([
+          stream.getVideoTracks()[0],
+          destination.stream.getAudioTracks()[0],
+        ]);
+      } else {
+          // Fallback if no mic: just use system stream
+          combinedStream = stream;
+      }
+
+      recorder = new MediaRecorder(combinedStream, {
+        mimeType: "video/webm",
+      });
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+            data.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        console.log("recording stopped");
+        const blobFile = new Blob(data, { type: "video/webm" });
+        
+        // Validate blob size (Fixes 0-byte corruption)
+        if (blobFile.size === 0) {
+            console.error("Recording failed: 0 byte file");
+            return;
+        }
+
+        const url = URL.createObjectURL(blobFile);
+        const base64 = await fetchBlob(url);
+
+        chrome.runtime.sendMessage({ 
+          type: "open-tab", 
+          url: url,
+          base64: base64 
+        });
+
+        data = [];
+      };
+
+      recorder.start();
+
+      if (focusedTabId) {
+        chrome.tabs.update(focusedTabId, { active: true });
+      }
     }
   );
 };

@@ -1,10 +1,9 @@
-// POAi v2.0 Service Worker - Robust Version
+// POAi v2.0 Service Worker
 
 // 1. State Management
 const updateRecordingState = async (active, type) => {
   console.log("Updating state:", { active, type });
   await chrome.storage.local.set({ recording: active, type: type });
-  
   const iconPath = active ? "icons/recording.png" : "icons/not-recording.png";
   chrome.action.setIcon({ path: iconPath });
 };
@@ -20,7 +19,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     case "stop-recording":
       stopRecording();
       break;
-    case "open-tab": // This message comes from offscreen.js or desktopRecord.js when recording is done
+    case "open-tab":
       handleRecordingFinished(request);
       break;
   }
@@ -33,14 +32,10 @@ const startRecording = async (type) => {
 
   if (type === "tab") {
     await setupOffscreenDocument("offscreen.html");
-    
-    // Get the stream ID for the current tab
     const tab = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab || !tab[0]) return;
     
     const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab[0].id });
-    
-    // Send to offscreen document to start recording
     chrome.runtime.sendMessage({
       type: "start-recording",
       target: "offscreen",
@@ -48,7 +43,6 @@ const startRecording = async (type) => {
     });
   } 
   else if (type === "screen") {
-    // Create the pinned tab for desktop capture
     const desktopRecordUrl = chrome.runtime.getURL("desktopRecord.html");
     const newTab = await chrome.tabs.create({
       url: desktopRecordUrl,
@@ -56,8 +50,6 @@ const startRecording = async (type) => {
       active: true,
       index: 0
     });
-    
-    // Wait a moment for the tab to load, then trigger it
     setTimeout(() => {
       chrome.tabs.sendMessage(newTab.id, { type: "start-recording" });
     }, 500);
@@ -67,22 +59,17 @@ const startRecording = async (type) => {
 // 4. Stop Recording Logic
 const stopRecording = async () => {
   await updateRecordingState(false, "");
-  
-  // Send stop message to EVERYONE (offscreen and tabs) just to be safe
   chrome.runtime.sendMessage({ type: "stop-recording", target: "offscreen" });
-  
   const tabs = await chrome.tabs.query({});
   tabs.forEach(tab => {
     chrome.tabs.sendMessage(tab.id, { type: "stop-recording" }).catch(() => {});
   });
 };
 
-// 5. Handle Finished Recording (Upload to Python)
+// 5. Handle Finished Recording
 const handleRecordingFinished = async (data) => {
   console.log("Recording finished. Data received.");
   const { url, base64 } = data;
-  
-  // We prioritize base64 if available, otherwise fetch the blob url
   let blob;
   
   try {
@@ -99,13 +86,13 @@ const handleRecordingFinished = async (data) => {
 
     await uploadToPythonBackend(blob);
 
-    // Clean up: Close the desktop record tab if it exists
+    // Close the helper tab
     const tabs = await chrome.tabs.query({ url: chrome.runtime.getURL("desktopRecord.html") });
     if (tabs.length > 0) {
       chrome.tabs.remove(tabs[0].id);
     }
     
-    // Open the Python Dashboard
+    // Open Dashboard
     chrome.tabs.create({ url: 'http://127.0.0.1:5000' });
 
   } catch (err) {
@@ -123,7 +110,7 @@ const uploadToPythonBackend = async (blob) => {
     const filename = `recording_${Date.now()}.webm`;
     
     formData.append('video', blob, filename);
-    formData.append('title', 'Screen Recording'); // Default title
+    formData.append('title', 'Screen Recording');
 
     const response = await fetch(`${API_BASE_URL}/upload`, {
       method: 'POST',
@@ -152,12 +139,10 @@ const uploadToPythonBackend = async (blob) => {
   }
 };
 
-// Helper: Ensure offscreen doc exists
 const setupOffscreenDocument = async (path) => {
   const existingContexts = await chrome.runtime.getContexts({
     contextTypes: ['OFFSCREEN_DOCUMENT']
   });
-
   if (existingContexts.length === 0) {
     await chrome.offscreen.createDocument({
       url: path,
