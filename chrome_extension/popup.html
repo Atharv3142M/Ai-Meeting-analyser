@@ -19,7 +19,7 @@
         
         .container {
             background: white;
-            min-height: 450px;
+            min-height: 500px;
             display: flex;
             flex-direction: column;
         }
@@ -227,6 +227,16 @@
         .error-message.show {
             display: block;
         }
+
+        .info-box {
+            background: #e6f7ff;
+            border-left: 4px solid #1890ff;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            font-size: 12px;
+            color: #003a8c;
+        }
     </style>
 </head>
 <body>
@@ -234,11 +244,15 @@
         <div class="header">
             <div class="logo">P</div>
             <h1>POAi v2.0</h1>
-            <p>Productivity Optimization Assistant AI</p>
+            <p>Meeting Recorder with AI Analysis</p>
         </div>
 
         <div class="content">
             <div class="error-message" id="errorMessage"></div>
+
+            <div class="info-box">
+                <strong>📌 Important:</strong> A "Share your screen" dialog will appear. Select the tab/window you want to record.
+            </div>
 
             <div class="form-group">
                 <label for="recordingName">Recording Name</label>
@@ -247,7 +261,7 @@
                        placeholder="e.g., Weekly Team Sync"
                        maxlength="100"
                        autocomplete="off">
-                <p class="help-text">Enter a name for this recording</p>
+                <p class="help-text">Enter a descriptive name for this recording</p>
             </div>
 
             <div class="recording-status" id="recordingStatus">
@@ -278,7 +292,8 @@
         </div>
 
         <div class="footer">
-            🔒 100% Local & Private Processing
+            🔒 100% Local & Private Processing<br>
+            Server: http://127.0.0.1:5000
         </div>
     </div>
     <script src="popup.js"></script>
