@@ -1,564 +1,261 @@
-# 🚀 POAi v2.0 - Productivity Optimization Assistant AI
+POAi v2.0 – Productivity Optimization Assistant
 
-> **Production-grade, local-first meeting recorder with AI-powered analysis**
+> A production-grade, local-first meeting recorder with AI-powered insights — fully private and offline.
 
-[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-NoSQL-green.svg)](https://www.mongodb.com/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
----
 
-## 🌟 What's New in v2.0
 
-### 🐛 **Critical Bug Fixes**
 
-1. ✅ **File Corruption Fixed** - Proper `recorder.onstop` handling prevents EBML header errors
-2. ✅ **Video Recording Fixed** - Now captures video + audio (not just audio)
-3. ✅ **Silent Tab Fixed** - Audio monitoring enabled (you CAN hear the meeting)
-4. ✅ **Speaker Explosion Fixed** - Smoothing algorithm prevents detecting 10+ speakers for 2 people
 
-### 🎯 **New Features**
 
-- **MongoDB NoSQL Database** - Scalable, flexible document storage
-- **Auto-Setup Launcher** - `setup.py` verifies all dependencies
-- **Professional Dark UI** - Modern, responsive dashboard
-- **Better Error Handling** - Modals instead of alert() dialogs
-- **Real-time Status** - Live processing updates
-- **Speaker Renaming** - Click to rename "Speaker 0" → "Alice"
 
 ---
 
-## 📋 Quick Start
+🚀 Overview
 
-### One-Command Setup
+POAi v2.0 is a next-generation, local-first meeting intelligence system built for privacy, accuracy, and productivity.
 
-```bash
-# Navigate to project folder
-cd poai_v2
+It records meetings directly from your browser, transcribes them using OpenAI Whisper, and generates rich AI summaries using local LLMs (Ollama) — all on your own machine.
 
-# Run setup (checks everything automatically)
-python setup.py
-```
+No cloud. No external APIs. No data leaks.
+Everything stays local.
 
-The setup script will:
-- ✅ Check Python 3.11+
-- ✅ Check FFmpeg
-- ✅ Check Ollama
-- ✅ Check MongoDB
-- ✅ Install dependencies
-- ✅ Create directories
-- ✅ Launch server
 
 ---
 
-## 🔧 Prerequisites
+✨ Key Features
 
-### Required Software
+🔒 100% Local & Private
 
-| Software | Version | Purpose | Install |
-|----------|---------|---------|---------|
-| **Python** | 3.11+ | Backend runtime | [python.org](https://python.org) |
-| **FFmpeg** | Latest | Video processing | [ffmpeg.org](https://ffmpeg.org) |
-| **MongoDB** | 4.0+ | Database | [mongodb.com](https://mongodb.com) |
-| **Ollama** | Latest | AI summarization | [ollama.ai](https://ollama.ai) |
-| **Chrome** | Latest | Extension | [google.com/chrome](https://google.com/chrome) |
+All recordings, transcripts, and summaries are processed and stored locally.
 
-### Optional (Recommended)
+Zero cloud uploads.
 
-- **NVIDIA GPU** with CUDA 11.8 (10x faster transcription)
-- **16GB RAM** (8GB minimum)
 
----
+🎥 High-Fidelity Recording
 
-## 📦 Installation
+Captures system audio, microphone audio, and high-resolution screen video.
 
-### Step 1: Install Prerequisites
 
-**MongoDB:**
-```bash
-# Windows (download installer)
-https://www.mongodb.com/try/download/community
+🎙️ Advanced Transcription
 
-# Or Docker
-docker run -d -p 27017:27017 --name mongodb mongo:latest
+GPU-accelerated Whisper for industry-leading transcription quality.
 
-# Start service (Windows)
-net start MongoDB
-```
 
-**FFmpeg:**
-```bash
-# Windows (Chocolatey)
-choco install ffmpeg
+🗣️ Speaker Diarization
 
-# Or download from ffmpeg.org and add to PATH
-```
+Automatically detects and labels multiple speakers.
 
-**Ollama:**
-```bash
-# Download from ollama.ai
-# Then pull model:
-ollama pull llama3
-```
 
-### Step 2: Run Setup
+🧠 AI-Powered Intelligence
 
-```bash
-python setup.py
-```
+Local Llama 3 (Ollama) generates:
 
-### Step 3: Install Chrome Extension
+Executive summaries
 
-1. Open `chrome://extensions/`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select `chrome_extension` folder
+Action items
+
+Highlights
+
+Key decisions
+
+
+
+📊 Professional Dashboard
+
+Modern dark UI
+
+View, manage, search, and replay your meeting library.
+
+
+⚡ Fix-It-First Architecture
+
+Automatically detects and repairs corrupt or incomplete web recordings before processing.
+
+
 
 ---
 
-## 🎯 Usage
+🛠️ System Architecture
 
-### Recording a Meeting
+POAi v2.0 consists of two coordinated components:
 
-1. **Start Server**
-   ```bash
-   python server.py
-   ```
-   Opens at: http://127.0.0.1:5000
+1️⃣ Chrome Extension — Recorder
 
-2. **Start Recording**
-   - Join meeting (Zoom, Meet, Teams, etc.)
-   - Click POAi extension icon
-   - Enter recording name
-   - Click "Start Recording"
-   - **Select correct tab** in permission dialog
-   - Grant microphone access
+Captures screen, mic, and system audio
 
-3. **During Recording**
-   - ✅ You CAN hear the meeting (audio monitoring)
-   - 🔴 Red dot shows recording active
-   - Tab must stay open
+Uploads raw recording to backend
 
-4. **Stop Recording**
-   - Click extension icon
-   - Click "Finish Recording"
-   - Automatic upload to server
 
-5. **View Results**
-   - Open http://127.0.0.1:5000
-   - Processing happens in background
-   - Click recording when completed
+2️⃣ Python Backend — “The Brain”
 
-### Using the Dashboard
+Repairs & processes recordings
 
-**Gallery View:**
-- Grid of all recordings
-- Status indicators (processing/completed/failed)
-- Click to open player
+Runs Whisper transcription
 
-**Player View:**
-- Left: Video player
-- Right: Interactive transcript (click text to jump)
-- Tabs: Transcript / AI Summary
-- Bottom: Speaker management
+Runs LLM summarization (via Ollama)
 
-**Speaker Renaming:**
-1. Scroll to "Speaker Management"
-2. Click speaker button
-3. Enter real name (e.g., "Alice Johnson")
-4. Save
+Stores all data into MongoDB
+
+Hosts the analytics dashboard
+
+
 
 ---
 
-## 🏗️ Architecture
+📦 Installation & Setup
 
-### System Components
+Prerequisites
 
-```
-┌─────────────────────────────────────────┐
-│     Chrome Extension (Recording)        │
-│  ┌────────┐  ┌──────────┐  ┌─────────┐ │
-│  │popup.js│→ │background│→ │offscreen│ │
-│  │  (UI)  │  │   .js    │  │   .js   │ │
-│  └────────┘  └──────────┘  └─────────┘ │
-└──────────────────┬──────────────────────┘
-                   │ Upload .webm
-                   ↓
-┌─────────────────────────────────────────┐
-│   Python Backend (Flask + MongoDB)      │
-│  ┌────────┐  ┌─────────┐  ┌──────────┐ │
-│  │FFmpeg  │→ │Whisper  │→ │Ollama    │ │
-│  │Extract │  │Transcrib│  │Summarize │ │
-│  └────────┘  └─────────┘  └──────────┘ │
-└──────────────────┬──────────────────────┘
-                   ↓
-┌─────────────────────────────────────────┐
-│    MongoDB NoSQL Database (poai_db)     │
-│  ┌──────────────┐  ┌──────────────────┐ │
-│  │ recordings   │  │ speakers         │ │
-│  │ - title      │  │ - recording_id   │ │
-│  │ - status     │  │ - speaker_label  │ │
-│  │ - transcript │  │ - display_name   │ │
-│  │ - summary    │  │ - segment_count  │ │
-│  └──────────────┘  └──────────────────┘ │
-└─────────────────────────────────────────┘
-                   ↓
-┌─────────────────────────────────────────┐
-│  Web Dashboard (Dark Mode UI)           │
-│  - Gallery View                         │
-│  - Video Player                         │
-│  - Interactive Transcript               │
-│  - AI Summary                           │
-│  - Speaker Management                   │
-└─────────────────────────────────────────┘
-```
+Ensure the following are installed:
 
-### Data Flow
+Python 3.11+
 
-```
-1. Extension captures video + audio
-   ↓
-2. Audio routed to: (A) File + (B) Speakers
-   ↓
-3. User hears meeting while recording (B)
-   ↓
-4. Stop recording → Complete blob created
-   ↓
-5. blob-ready message sent to background
-   ↓
-6. Background uploads to Flask server
-   ↓
-7. Background processing:
-   - FFmpeg extracts audio
-   - FFmpeg compresses video
-   - Whisper transcribes (GPU)
-   - Speaker diarization (smoothing)
-   - Ollama summarizes
-   ↓
-8. Results stored in MongoDB
-   ↓
-9. Dashboard displays completed recording
-```
+MongoDB Community Server (running at localhost:27017)
+
+FFmpeg (added to PATH)
+
+Ollama with llama3 model installed
+
+NVIDIA GPU (recommended) for faster Whisper transcription
+
+
 
 ---
 
-## 🔬 Technical Details
+1. Backend Setup
 
-### Bug Fix #1: File Corruption (EBML Header)
+Clone repository:
 
-**Problem:** Race condition - background.js uploaded before blob was complete
+git clone https://github.com/yourusername/POAi-v2.git
+cd POAi-v2/python_backend
 
-**Solution:**
-```javascript
-// offscreen.js - Only send when truly ready
-mediaRecorder.onstop = () => {
-  const blob = new Blob(chunks, { type: mimeType });
-  // Convert and send
-  chrome.runtime.sendMessage({ action: 'blobReady', data: blob });
-};
+Create & activate virtual environment:
 
-// background.js - Wait for blobReady before upload
-if (request.action === 'blobReady') {
-  uploadVideoToServer(request.data);
-}
-```
+python -m venv env
 
-### Bug Fix #2: Audio Monitoring
-
-**Problem:** User couldn't hear tab audio during recording
-
-**Solution:**
-```javascript
-// Create two audio destinations
-const recordingDest = audioContext.createMediaStreamDestination();
-const monitoringDest = audioContext.destination; // Speakers!
-
-// Route audio to BOTH
-tabAudioSource.connect(recordingDest);  // For file
-tabAudioSource.connect(monitoringDest); // For user
-```
-
-### Bug Fix #3: Speaker Diarization
-
-**Problem:** Too many speakers (10+ for 2 people)
-
-**Solution:** Smoothing algorithm
-```python
-def smooth_speaker_diarization(segments):
-    # If segment < 1s → merge with previous
-    # If pause < 2s → keep same speaker
-    # If isolated segment → merge with surrounding
-    # Result: 2-4 speakers instead of 10+
-```
-
-### Bug Fix #4: Video Capture
-
-**Problem:** Only captured audio
-
-**Solution:**
-```javascript
-// Capture BOTH video and audio
-tabStream = await getUserMedia({
-  audio: { /* ... */ },
-  video: {  // ← Added this
-    mandatory: {
-      chromeMediaSource: 'tab',
-      chromeMediaSourceId: streamId
-    }
-  }
-});
-```
-
----
-
-## 📊 Database Schema (MongoDB)
-
-### recordings Collection
-
-```javascript
-{
-  _id: ObjectId,
-  title: String,
-  status: String, // "processing", "completed", "failed"
-  created_at: DateTime,
-  paths: {
-    video: String,      // Original .webm
-    audio: String,      // Extracted .wav
-    compressed: String  // Web .mp4
-  },
-  metadata: {
-    size_mb: Number,
-    duration: Number,
-    language: String,
-    num_speakers: Number
-  },
-  transcript: [
-    {
-      start: Number,
-      end: Number,
-      text: String,
-      speaker: String
-    }
-  ],
-  summary: String,
-  error_message: String
-}
-```
-
-### speakers Collection
-
-```javascript
-{
-  _id: ObjectId,
-  recording_id: ObjectId,
-  speaker_label: String,      // "Speaker 0"
-  display_name: String,       // "Alice Johnson"
-  segment_count: Number,
-  total_duration: Number
-}
-```
-
----
-
-## 🚨 Troubleshooting
-
-### Server Won't Start
-
-**Error: "MongoDB not running"**
-
-```bash
 # Windows
-net start MongoDB
+.\env\Scripts\activate
 
-# Docker
-docker start mongodb
+# macOS/Linux
+source env/bin/activate
 
-# Check status
-mongo --eval "db.adminCommand('ping')"
-```
+Install dependencies:
 
-### File Corruption
+# PyTorch with CUDA (example for Windows + CUDA 11.8)
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118
 
-**Error: "EBML header parsing failed"**
+# Remaining requirements
+pip install -r requirements.txt
 
-✅ **FIXED in v2.0** - Proper blob handling implemented
+Run environment check and start server:
 
-If still occurs:
-1. Update Chrome to latest
-2. Clear extension and reload
-3. Test with short 10-second recording first
-
-### No Audio in Recording
-
-**Symptoms:** File size very small, no sound
-
-**Solutions:**
-1. Ensure tab has active audio
-2. Select correct tab in permission dialog
-3. Check system audio settings
-4. Test on YouTube first
-
-### Can't Hear Meeting
-
-**This should NOT happen in v2.0**
-
-If you can't hear:
-1. Check system volume
-2. Check browser tab not muted
-3. Check Windows sound settings
-4. Restart browser
-
-### Too Many Speakers
-
-**Symptoms:** 10+ speakers detected for 2 people
-
-✅ **FIXED in v2.0** - Smoothing algorithm implemented
-
-### MongoDB Connection Failed
-
-```bash
-# Check if MongoDB is running
-mongo --eval "db.version()"
-
-# Start MongoDB
-# Windows:
-net start MongoDB
-
-# Linux:
-sudo systemctl start mongod
-
-# Mac:
-brew services start mongodb-community
-```
-
----
-
-## 📁 File Structure
-
-```
-poai_v2/
-├── setup.py                  # Automated setup & launcher
-├── requirements.txt          # Python dependencies
-├── server.py                 # Flask API + MongoDB
-├── transcriber.py            # Whisper + diarization
-├── summarizer.py             # Ollama summarization
-│
-├── videos/                   # Original uploads
-├── audio/                    # Extracted .wav
-├── compressed/               # Web-optimized .mp4
-├── logs/                     # Server logs
-│
-├── templates/
-│   └── index.html           # Dashboard UI
-│
-└── chrome_extension/
-    ├── manifest.json        # Extension config
-    ├── background.js        # Service worker (FIXED)
-    ├── offscreen.js         # Recorder (FIXED)
-    ├── offscreen.html       # Hidden page
-    ├── popup.html           # Extension UI
-    ├── popup.js             # UI logic
-    └── icons/               # Extension icons
-```
-
----
-
-## 🎯 Production Checklist
-
-### ✅ All Bugs Fixed
-
-- [x] File corruption (EBML header)
-- [x] Audio-only recording
-- [x] Silent tab
-- [x] Speaker explosion
-- [x] Windows UTF-8 encoding
-- [x] Race conditions
-
-### ✅ Production Features
-
-- [x] MongoDB NoSQL database
-- [x] Auto-setup launcher
-- [x] Professional dark UI
-- [x] Error modals (no alert())
-- [x] Loading states
-- [x] Background processing
-- [x] Status tracking
-- [x] Comprehensive logging
-- [x] Keep-alive mechanism
-
-### ✅ Testing
-
-- [x] 10-minute meetings
-- [x] Multiple speakers
-- [x] Different video sources
-- [x] Long recordings (1+ hour)
-- [x] Concurrent uploads
-- [x] Error recovery
-
----
-
-## 🔒 Privacy & Security
-
-- ✅ **100% Local** - All processing on your machine
-- ✅ **No Cloud** - No data sent to external servers
-- ✅ **No Telemetry** - No tracking or analytics
-- ✅ **Localhost Only** - Server bound to 127.0.0.1
-- ✅ **Open Source** - Full code transparency
-
----
-
-## 🚀 Performance
-
-**10-minute Meeting:**
-- Upload: 5-10s
-- Audio extraction: 10-20s
-- Video compression: 30-60s
-- Transcription (GPU): 2-3 min
-- Transcription (CPU): 8-12 min
-- Summarization: 30-60s
-- **Total: 4-6 min (GPU) | 10-14 min (CPU)**
-
----
-
-## 📄 License
-
-MIT License - Use freely for personal or commercial projects
-
----
-
-## 🆘 Support
-
-### Getting Help
-
-1. Check this README
-2. Run `python setup.py` for diagnostics
-3. Check server logs in `logs/` folder
-4. Verify MongoDB is running
-
-### Common Commands
-
-```bash
-# Start MongoDB (Windows)
-net start MongoDB
-
-# Check MongoDB
-mongo --eval "db.version()"
-
-# Start server
+python setup.py
 python server.py
 
-# Test connection
-curl http://127.0.0.1:5000/health
+Backend will run at:
 
-# View logs
-type logs\poai_20250112.log
-```
+http://127.0.0.1:5000
+
 
 ---
 
-**Version:** 2.0.0 Production  
-**Release Date:** January 2025  
-**Status:** ✅ All Bugs Fixed  
-**Platform:** Windows 10/11, macOS, Linux  
+2. Chrome Extension Setup
 
-🎉 **Ready for production use!**
+1. Open Chrome
+
+
+2. Visit: chrome://extensions
+
+
+3. Enable Developer Mode
+
+
+4. Click Load unpacked
+
+
+5. Select: chrome_extension folder
+
+
+6. Pin POAi v2.0 to toolbar
+
+
+
+
+---
+
+🚦 Usage Guide
+
+✅ 1. Start Backend
+
+Run:
+
+python server.py
+
+🎥 2. Start Recording
+
+Click the POAi Chrome extension
+
+Click Start Recording
+
+Select screen/window/tab
+
+Enable “Share system audio” for meeting audio
+
+
+🛑 3. Stop Recording
+
+Click extension → Stop Recording
+
+File uploads to local server instantly
+
+Backend:
+
+Repairs recording
+
+Transcribes using Whisper
+
+Summarizes using Llama 3
+
+Stores metadata in MongoDB
+
+
+
+📊 4. View Dashboard
+
+Open:
+
+http://127.0.0.1:5000
+
+Your processed meeting will appear automatically.
+
+
+---
+
+🔮 Future Roadmap
+
+🟢 Real-time Transcription Overlay (Live captions during meetings)
+
+🟢 Calendar Integration (Auto-record scheduled meetings)
+
+🟢 Semantic Search across entire meeting history
+
+🟢 Multi-language Support with on-device translation
+
+
+
+---
+
+📄 License
+
+This project is licensed under the MIT License.
+See the LICENSE file for details.
+
+
+---
+
+POAi v2.0 — Privacy First. Productivity Always.
+
+
+---
+
