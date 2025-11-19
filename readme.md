@@ -1,13 +1,12 @@
 POAi v2.0 – Productivity Optimization Assistant
 
-> A production-grade, local-first meeting recorder with AI-powered insights — fully private and offline.
+---
 
+> **Production-grade, local-first meeting recorder with AI-powered analysis**
 
-
-
-
-
-
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-NoSQL-green.svg)](https://www.mongodb.com/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
